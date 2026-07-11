@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Barbozza's — Control</title>
+<link rel="manifest" href="data:application/manifest+json,{&quot;name&quot;:&quot;Barbozza's Control&quot;,&quot;short_name&quot;:&quot;Barbozza's&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%232B211C&quot;,&quot;theme_color&quot;:&quot;%23C1440E&quot;}" />
+<meta name="theme-color" content="#2B211C" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (compat SDK, funciona con scripts clásicos) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.0/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.13.0/firebase-firestore-compat.min.js"></script>
+
+<!-- React -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.0/babel.min.js"></script>
+
+<style>
+  :root{
+    --cream:#F7F1E6;
+    --mozz:#FFFDF8;
+    --char:#2B211C;
+    --char-soft:#3A2E27;
+    --tomato:#C1440E;
+    --tomato-deep:#9A360A;
+    --basil:#4C6444;
+    --gold:#D4A017;
+    --line: rgba(43,33,28,0.12);
+    --danger:#B3261E;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--cream);color:var(--char);font-family:'Inter',sans-serif; overscroll-behavior-y:none;}
+  #root{min-height:100vh; display:flex; flex-direction:column;}
+  h1,h2,h3,.display{font-family:'Barlow Condensed',sans-serif; font-weight:800; letter-spacing:0.02em; text-transform:uppercase;}
+  button{font-family:'Inter',sans-serif; cursor:pointer;}
+  input, select{font-family:'Inter',sans-serif;}
+
+  /* Header */
+  .topbar{
+    background:var(--char);
+    color:var(--mozz);
+    padding:18px 20px 16px;
+    position:sticky; top:0; z-index:20;
+    box-shadow:0 2px 10px rgba(0,0,0,0.15);
+  }
+  .topbar .brand{font-size:28px; line-height:1; color:var(--mozz); display:flex; align-items:baseline; gap:8px;}
+  .topbar .brand span.dot{color:var(--tomato); font-size:28px;}
+  .topbar .sub{font-size:12px; color:rgba(255,253,248,0.6); margin-top:2px; letter-spacing:0.04em; text-transform:uppercase; font-family:'Inter'; font-weight:600;}
+  .role-badge{
+    position:absolute; top:18px; right:20px;
+    font-size:11px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase;
+    background:rgba(255,253,248,0.12); color:var(--gold); padding:5px 10px; border-radius:20px;
+  }
+
+  main{flex:1; padding:16px 16px 100px; max-width:640px; width:100%; margin:0 auto;}
+
+  /* Bottom nav */
+  .navbar{
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--mozz);
+    border-top:1px solid var(--line);
+    display:flex; z-index:30;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .navbtn{
+    flex:1; border:none; background:none; padding:10px 4px 8px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    color:rgba(43,33,28,0.45); font-size:11px; font-weight:600; letter-spacing:0.02em; text-transform:uppercase;
+  }
+  .navbtn.active{color:var(--tomato);}
+  .navbtn .ic{font-size:20px;}
+
+  /* Cards */
+  .card{
+    background:var(--mozz); border-radius:16px; padding:16px;
+    margin-bottom:12px; border:1px solid var(--line);
+  }
+  .section-title{font-size:22px; margin:4px 0 14px; color:var(--char);}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .subtabs{display:flex; gap:8px; margin-bottom:14px;}
+  .subtab{
+    flex:1; text-align:center; padding:9px 6px; border-radius:10px;
+    border:1px solid var(--line); background:var(--mozz);
+    font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--char-soft);
+  }
+  .subtab.active{background:var(--char); color:var(--mozz); border-color:var(--char);}
+
+  .item-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .item-row:last-child{border-bottom:none;}
+  .item-name{font-weight:600; font-size:15px;}
+  .item-meta{font-size:12px; color:rgba(43,33,28,0.55); margin-top:2px;}
+  .qty{font-family:'Barlow Condensed'; font-weight:700; font-size:22px; min-width:52px; text-align:center;}
+  .low{color:var(--danger);}
+  .badge-low{
+    display:inline-block; background:rgba(179,38,30,0.1); color:var(--danger);
+    font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; margin-left:6px; text-transform:uppercase;
+  }
+  .stepper{display:flex; align-items:center; gap:8px;}
+  .stepbtn{
+    width:34px; height:34px; border-radius:50%; border:1.5px solid var(--char);
+    background:var(--mozz); font-size:18px; font-weight:700; display:flex; align-items:center; justify-content:center; color:var(--char);
+  }
+  .stepbtn.plus{background:var(--basil); border-color:var(--basil); color:var(--mozz);}
+  .stepbtn.minus{background:var(--char); border-color:var(--char); color:var(--mozz);}
+
+  .btn{
+    border:none; border-radius:12px; padding:13px 18px; font-weight:700; font-size:14px;
+    text-transform:uppercase; letter-spacing:0.03em; width:100%;
+  }
+  .btn-primary{background:var(--tomato); color:var(--mozz);}
+  .btn-primary:active{background:var(--tomato-deep);}
+  .btn-secondary{background:var(--char); color:var(--mozz);}
+  .btn-outline{background:none; border:1.5px solid var(--char); color:var(--char);}
+  .btn-ghost{background:none; color:var(--danger); font-weight:600; text-transform:none; letter-spacing:0;}
+
+  input[type=text], input[type=number], input[type=tel], select{
+    width:100%; padding:12px 12px; border-radius:10px; border:1.5px solid var(--line);
+    font-size:15px; background:var(--mozz); color:var(--char);
+  }
+  label{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:var(--char-soft); display:block; margin:10px 0 5px;}
+
+  .fab{
+    position:fixed; right:18px; bottom:88px; z-index:25;
+    width:54px; height:54px; border-radius:50%; background:var(--tomato); color:var(--mozz);
+    border:none; font-size:28px; box-shadow:0 6px 16px rgba(193,68,14,0.4); display:flex; align-items:center; justify-content:center;
+  }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(43,33,28,0.5); z-index:50;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .modal{
+    background:var(--cream); width:100%; max-width:640px; border-radius:20px 20px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom)); max-height:88vh; overflow-y:auto;
+  }
+  .modal-handle{width:40px; height:4px; background:var(--line); border-radius:4px; margin:0 auto 14px;}
+
+  /* Pizza slice progress (signature element) */
+  .pizza-wrap{display:flex; align-items:center; justify-content:center; margin:6px 0 2px;}
+  .pizza-svg{width:64px; height:64px;}
+  .slice{transition:opacity .25s ease;}
+
+  .client-card{display:flex; align-items:center; gap:12px; padding:14px 0; border-bottom:1px solid var(--line);}
+  .client-card:last-child{border-bottom:none;}
+  .client-name{font-weight:700; font-size:15px;}
+  .client-phone{font-size:12px; color:rgba(43,33,28,0.55);}
+  .free-tag{
+    background:var(--gold); color:var(--char); font-size:10px; font-weight:800; padding:3px 8px;
+    border-radius:20px; text-transform:uppercase; letter-spacing:0.03em;
+  }
+
+  .empty{text-align:center; padding:40px 12px; color:rgba(43,33,28,0.5);}
+  .empty .ic{font-size:36px; display:block; margin-bottom:8px;}
+
+  .pin-screen{
+    min-height:100vh; background:var(--char); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:24px; color:var(--mozz);
+  }
+  .pin-dots{display:flex; gap:14px; margin:22px 0;}
+  .pin-dot{width:14px; height:14px; border-radius:50%; border:2px solid var(--mozz);}
+  .pin-dot.filled{background:var(--tomato); border-color:var(--tomato);}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; width:100%; max-width:280px;}
+  .key{
+    background:var(--char-soft); border:none; color:var(--mozz); font-size:22px; font-weight:600;
+    border-radius:14px; padding:16px 0;
+  }
+  .key.del{font-size:16px;}
+  .toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:100;
+    background:var(--char); color:var(--mozz); padding:10px 18px; border-radius:30px; font-size:13px; font-weight:600;
+    box-shadow:0 4px 14px rgba(0,0,0,0.25);
+  }
+  .savingdot{width:7px;height:7px;border-radius:50%;background:var(--basil);display:inline-block;margin-right:6px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const {useState, useEffect, useMemo, useRef} = React;
+
+/* ============ FIREBASE CONFIG ============
+   Reemplaza estos valores con los de TU proyecto de Firebase
+   (Firebase Console > Configuración del proyecto > Tus apps > SDK config)
+=========================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyC76z2CBKYZyLCysWnY2lbX8n8aP4QiFa4",
+  authDomain: "barbozas-pizzas.firebaseapp.com",
+  projectId: "barbozas-pizzas",
+  storageBucket: "barbozas-pizzas.firebasestorage.app",
+  messagingSenderId: "273024551956",
+  appId: "1:273024551956:web:8fc75208408b65108dab01"
+};
+
+let db = null;
+let firebaseReady = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  firebaseReady = true;
+}catch(e){
+  console.error("Firebase no configurado todavía:", e);
+}
+
+const STAMPS_GOAL = 5;
+const LOGO_DATA_URI = "data:image/webp;base64,UklGRjwxAABXRUJQVlA4IDAxAABQjgCdASrEAAQBPmEokUUkIqGW/RU4QAYEtTdwuJh6TF2jPU+ZZyT10+xPt3+D/6ftP50uwPLH6T873+V/ZD3L/of9jvgG8dH1Nfur6jf6r/qvWd/6/qk/xvqCf4DqO/Qo8ur94fhT/un/d9NP1AP/x6gHCuf1Dtj/xngr+RfOv43++f4//ef4f28cbfVB/s+hf8s++X6z+9/vB7D/8n/DeMfxY/rfzM+Aj8e/m3+L/uX7k/4P48oC/Tn6b0C/Zj6p/rP7P+7X+d+Gb5j/i+kH2W/6nuBf0X+sf7L84/XH8Kf1D2A/6N/ev+7/jv8z8NP9h/6/9P/tP3Y9un6P/mv/F/mf9L8hf80/sv/F/w3+g/aD52v//7oP3P///u0/ud//2rhsWNzLVw2LG5lq4bFjcy1aHXsHalYkjhEckT7wLvGPfuFQ2S3848NWMsREhwCssI8HzUp5ewtk6sgkvzlhTsWH+P7FLVAxysikw6BBrdmJ1mnfVko4Roou3niJU1NE89GyUhxt/Rin5K0WRNqIn9wpkG07aVW7Pt8JB77jVwYgfZV1CKrVyf5aIQ6BCqgQJPSbpLMRINDX6tqh3GwVp7eHUr6Be6yW5t69/wEkOgbr5RWofJEDTwO9S5za7uc6yw9QGd0WjkPi4888XTWzEhXe3NpmRpli6vjP2GDgynGfH9q5Ed7rwKZDoNFgs/8pv4HMNOHTbehM7nRNRlGcU7aE2RaXPboYa1A7jF0kmNZC4WK46Bu5YNexBZYZLwVa2V1pFmvrLVgOw4AvDps/481Uxcnd3JRj8MPj6TYCk3bVEbN+F//0QufLVJrS/1cyoS/KRUNfyCzDKdkRzBb0C5+wDobF56yDXH0iXw1t3nk7g1xnsRTidMtPrVL+XwXXAGgrRevi4+UFvlVzjztqL9L5ikQON3uu99LFU9lAWOHx0p5L/cCTpr95iTIWywIgJ5UWGCdhpP+ufxzKBa9UqjEN6wo7EbvYnFQz8p/QgqgiCysZ/xpTn2d1s5GL6is616ih7pOL2ltA7kM7aHliBJSt2Ia0FeX0rDGpJklSLPMMAHvfYeM3p8Jc+1PNyd9wAY8Ltvpy7fRJ3V27qjhXvNjp/WQPF1j8NmQUGKjbvuEriczGfUR6KmHp4BaEPpJ2whtNM2U8dw+ri0tps8v7cYs9aFzoMHJ6wcYVYor/1REon06dEwmyfQJM8x6spC+VthjmmcLjo6kvdR/54zs3LkVPM5pyT3S9LPxxkDO11UQZxkvM7CqZufiZ2hm67UF6tx4/RH3UfdDJalP4Zh37yeemSEPH4wQSu6VKzou2tcDkFCuiyx//g4cxfPoMg1S3migDm4/6ueMxwMT81yhGSCLDLSWjJeNh6xs7tohPUNeYsUtFNE9McK4YsB/1rS1G4D9hNgi/wsf6SGqXBPpeoEmItqrfB7Cj90Xuz2ANHdp573sVVuyUYH4+VfhMenp6mVqe9ZS7KJGi7WpMWKpk9w7JBv+SqW15pK1cPCY3MtXDYsbmWrhsWNMAAP7/wwuAAAVirEfo512tZ3/KpeQfmA9gZfmIRkqNvZCK9VInUnBmwym4ySaD7vYFiyMwlISgqw92FqOmJ3E4AtgEkFn4vhLuEpTH//FI6bOiL09S8m/FayeG/yv+/h7G+4hcLBQIfnxjg1CEB8JTj7++H7wiPr/zZPPqvGFTddCb+TD/iGmbN9SqA32E/g0YVH//UGR/uQniCmne/jspw0oeKaZV9lps5bR9Le0IrmIr0uqobPZKxHn6AxtXQX1OG0sjKYoqf3dqfv+seo0y+eXxr+o1GOTFH9ASAVaesZMp0Q9uCHp8wt2GBQzYDL5M5MYpG4Xq67UTKbH4JKbUAIZqc+1z5XIfTIWUzz52bPylB9UdPkhH/2+yO3yz5YJo4tM8Fdghmkg9YdUhBhLsEX815JTq6Ts+jkAl45DLbrUbNys55MvQRKV/rgeds6m/XBQwIPGIcYPPjK0hxf/oOaYUGemc6JNU5sUXxpeXxp6prjuQ9QriI4+/7sQ8rP9G/vFNc/dXJWbWy348k4WeZ2NSESpaTRM5aB8K9pYQMJI5HJ7oR4yfEr0O3bUe7D+ezz8P/hP0qlqZ7M4+ylgyZLAOklFPwhW1u3OoWXHLoXMG58BcDxnaeXSEmW5kiUPbtWDrikqXhiUPQeqzUyOW+ltKGCrHcu5XJk7xHBInYp2eycCOpAsUc+tyGqr5gOHIgv7lP6HOCuJhnwhd46OlYddq1SblBfUMoSJwA66uvkW4drM2zQxXBUejctoI33qBi3QzprT6kNpcWwlFAwUQ1lm3qF5eQoPfaaHXuRPr8KNnF9/18pUxv6IaU4Nqd4pF5hslNftD+ZxV/Utvia4aQS3/bc6M2y6LK+6GxzCrxfwQY+5LwHD/BIBBMRIIj3jp6m+MfdLcu8P1IEAY55RcE4DqmraOED0HNZEaEKTs5vnHnn6xhofDiKsiSuT3IG5KiUnopDZ6hn/tB1dZtK9wj/7fVrPA0uuVZwHHRh4TkixeTJhxS5K/iLZIM0vKHJ3C9ziXAMKzYO3hcExkYpa+kvu5pOzY0RCr6aI3FmgftNuRHknIjPobvrpZybn2OrGW8PamK6i/pwxqhu2+B/sLx9ZTZwAWb/seASeWxTn64i0OCjP1kXVfrfy4vFmHMQ4Ucsvj3iGn3Cf4A2XciYumRVE8Mas9hS24JPe8Mg9je+126RGCv6un5dpxdxhgdG1ymZGyjLZnlNFLH+v/aPfK+NZ4isD+xlAZb4/d1GjK+web2rlOAZjpaeASAVToOr0JhQiaXj397gkdtt1r8lU3uGmn1Okbk4U7ZvYMnv9Qgna6qe2wo1tiSNQ2jMF/lHmlmTNe33hdcMQPC6+ks7e0gHx69eBxOI7DomorAbr3pXsA9UqJYu8P57tsSNJfLj1d1+FqCBbXMAZDtunjLVzkwEYvQnFJYSCNr7K/Er3qOP6xCxKHSDPjRT/8HTvGzIhb2OD7PWo2twdlaqeXWMdzjcz+J87bdDhFCc9h0LEsSSfNSYVHfQsCjRGrgnd4cqcZDWLMDuM38x6XSTA80b6fw/jjRwdIpdyeBIV3zTBHtqnTQq6q3xL4P92uUprUqUesf/l6Iyy5NzrQvzaY3vgu72Bo2JmXt0dfIJnrMDElINeSS9T9cewFCsZngL75mjvP1HmaE1ElXfM2JrHKdoof3QjQM03KEm0DGzT+YtfO/5/O48S0tQpwqcVj5Z0T6IuSO6Y6TxwilM3bhL8T1UoCpPXPBMaqdIi2cDtYb36OU8q1pJjia4jlwcIuxeitPLXiZlWMBtk91VpNDxOAZRHNFsxdhRW6QgRR4dt9ohOtE4dnlELuurCJuSN7yEn1Gzd3pDyrNoMHPiJc5KqwdN0/0nNTntLNXdl7jsnlZz9o327xUyWvG3J95PGuJbHLs/vYQKs0OBhf22eQ+6VeMzCAsrq8jrpNLO9eORrQKGOBiPtrgxZI/3y7eTcGcnFf4AjuDEyc0VoGVNdbcopCXh+ydy3Pts8U/IqJ3q/DqwFVdzEgVu6Mv/LZiiZYV6DkIlf3awkKWFN7HImRXvn2c6zirSB6vTb8Q8jck282KS7hgugD9trzAAT9J7kTWmv9N2yU40UOL639F1l3zUGIql6qZGEOEDkPvc72QWbjkmYqerbhmm0Fam4WNO5jalHR6SCIo5+du0Fs35iPoqObjrSv6yhKq8dmK5cVgXe1ZkXNb5xzW7+CgQAK6b4OIkc8kWOS+o/FuHGIieWbFjqHswUN2QMeSXqdn9kJYCBdzoMcRRBcAd6x6rQTIIs3zG0bvVUgsrqO0nAN1Gi3BJ2MOpxlB5fzkrr+4htmGXh7kBwCGYVbmqwQb+VeldY09XSL8VD/WKMNuXY0ScUJjWfPlx7nOhY+JpQPpDEdJXHPg3kXR6Hroh8LeOo+PCcI0gLyNcn2IZE4nti9jucyFthNpX8NO3OkDgburpHnZwyVT38CLZVNqiACE6Q59lEiyFhbY3OGAK7fgD1trI+VPohMRVDXjnJiI2KTyvb2TxkRaIxoVqQ1R0dxt1yJB3F/uJPv0U3kCTseZkftpils8sWY4hlaG9T9gJpZMKieOq9MBAmyFZ906bLki6wnhbZQ+kFrd4RB2hj5O/azeAaFZil9RjUrMgGe1V0T9U7MWx2Wyy35klfKDmeKyjmVXkO25rfYxKKbkwcik8pIMGgQ5u79gehcqDlakQgme1P337WygMx2ZOOe7c8YsEVcetZVlX/asBgJk1CJV+Sy0oM2qHaqTSYs+PyVu8Krx/wU0mN7Jne3MQYCv6uipIeeAyR5ECtH6CzYSQDD5vHZpZlYkHymUt7yKUxI17exVpt6bbEHx7SxuiR+CC752jV3vNyz9fEOUdJ52pTHL5O26PXz6CMBXED8wbmh2WaE0IYCnOElTfaPukG7xp9y2uBOmIZlku2rE3LLOWxa6BFXXcsZEOetpQVLQ+Bo3PSFcPwmKXe3ZHRTHcvpCWjZTmVOlCPbxKO6QP/HtSBm2YsXVW9xxLp6ADm361NsO2koX/wy1pyn+i/2nrjoa54UweTrFVAB4R++dQl6Bcgvquc2dOls0C2bazAgMPe2UTiJQWrcEOmt6s15835Ge6X+0BD/xctT1nI/H9XrKplST0Ppcp+9WMjNhwLmp5/fbxxnCKyryZwtRF3ObEW/yAoTgmmJ63eaHnsERT9NT/LOY/mMdJZcqTdKWJhMVwP81n39JElZmo2kphSEy1r7CV2n4NBsx4vQv+uSOGNX6PrYlbGN4lus75bmcULdyPLdn9xXto1/ANbHPfhvx4fIDKXGL1Ly6frZCrjNntSts7RlgS+n1DckFIxb3u1aYAi6bnGHVsHhsbIfKqTrsvvjjSQcI/xGdkaWMVDCyStqJ8IXy1yV+Ocx0zNHvqKcenC6gCB9CPkZaqjBCQuixATQ8i+nWeylU9tSDzHFMY4VUKj7Y88WBVXs7UzBLXFUYXlAn/IpfxrGlhBGEJDb19eIb2Yh1RmHJGWiRWFSI93nn2pvEB1xfU1q4lix4nNDdClK1GiBg7yICdLmsA0pwArk95Osd0qGVoOULbg38OBgkFuQfnFZUGtR7iEsY/VJp0xOehRB0DgSPxlnWDejQ8d5LagTopQHJ4/LVjbCEnqIaREpKjg/o/mJa0IPtmvBq37rYovD6cuR7KJ+q8ndm2OmnEVl2Sz8doScbwQMojboyWXy2x2z/yiXS1bLWIUDV4cV3c9HBVo0qc1N4VQLUOlhhzVrQu1ntfyVLxXMF71pZt2o44hdrK5yUyexqIo+KO1nOEbS3zr2L3j1V3/wF8lYnfO0HCWsi6PK8BbWzBxzbOBWz0xuQun/MTSA+wflJ+yD3vWVSVLoO6X+ELM/s4h96ShmRashHXgh2ubaa/R6Duo3UOyRBTG/2KBnADb/D0dgq52Pgu3ejE2ZjC8zmVHZq4FT+Tfts83kTt7CHqHYURQncgbD+Av1IynigJtbTyelnZz1yUnrOjh7zGr74sBji0ke/8ovGgJHor3o4BwClpImL/oYmCBK3Ihv/b7LDTkmUKnvdWLp99wZj/XEzI7zbldLpiYVYN7aPW1NfAc6ao/ZlrxguHgj1q7k/Xl4lMMjTkgQRmwa9x8U2ucWD7RwSqBH9wRGLl37u252KSxndx6QZeblKG86ZVWfKOgr8uA863ouP+HfIZl1ZuSv2idAQuW+tTFaRd+NQ7LxiPerk57apWnVpVOsnlT4g/WUGdobjm61EPW4elFkflm6xvCTiIHOvP1g7LCnWkCx5DuerG8eLbIjvj7TRlqNLaB21ORPInxgIMCQggoK4ZRGtad9wLYUC9YzI4Syeb12xsqQkDQwX9HJjtg5USOuD+LhZiNTGjKwtocFnugVEyK3w8kOP1s3X41Tz1wt90qplp0pYZpdBfWYidiTZYrP+1TRnXnwGJvRfhUlhanRPsOKtmdXtuNliFvZ/Zo+Q4FAv1TRxW4fExfCpp03wSUv1fQ038JYyLduh00TXRTaWMGHVyJBVJvwl36eGlmVDKhx2Vuzj/dAneu7JI+Ar7jSr43vqCbsyPRvun4WGmXHmS7DQ8PBTD/2ebO0Ziouan+i7ZmRy6hDS2mekjv6p/k4mY/1yVLYi1pvgXwPDoU7vhxerTudF3dNYA/jh/D+iLVek2bgurQ7yK4W1lrKeNUiU4thCLF70kF7GoZ8+J9eIWeA350hphZifjrEfzh91XJmrl1fRwIZ/WU9W+n8TFVHbeynS7XT56CACs7Z+21Ox4bazhuliNcHLkako8JbdbbqZR9OkEtbQO1Vs1rRqVEM7/OCcr2BDwF9GBIh25Bm0RqGbOJ3AcovaUseLpdcasijlBzMKTgdxLuYbYWJyNqtmAXVtIEiQjA5AtEeADahX9YYiiI7TweZyZhB9gkwtEd/Z/WkU+4lCa0fsLMD9eIaf4O688fsZhWV2xoB4qZlpBw3/6NAfjjxwPrZOCDNLGuaLj8mWK3VJOB2fTyxEeklFDa4qyRYHaHrjYK1MW8aZItSGG1+sjpr2BzzE2+ABh83l3TxLqFeHY2ATm23YYHaL10mbzvLcPmKTvD5MQIADKGj3azSuFS0jBVI8ajqWMdZjQ9/C4C8OxdrEIyaPPiGTRgUzIf471TB9OOz7oiRkONCowpOPF/XM823WnVoTZ+K4Yyhg8TEHfwYQBIrrsCy+3Jib0Ty7Ayh54yYVs3B6Q8ePf2U0/J0fZPV0UoDCmve+Jk1aISq6XyLlzizdCRJpxSvMVG5Wjqmz49Wmv63a+ACPirsmB31eKLiHsUPsNM68L0evZP+osmT117g82qpLcrQF8rxdpQD4d0/+tKDbZyxhWagH9dwZqW09hoaqjF+aTeI4pVBEDHM/op9jt+o+elxlndYi5HzeWo6lATJMk3wxkaBldPxxWGXJsso6bP48aobIwxF3KFLryeDxhAhIcpwcEM7Knd0LvE/dsWhA34mzSqV6rL8LbMlm92LT5XrHjK3a7EBvpTryzvJSRd9T7O9sZX4wURWaUVZy60DadStik7N2EmkikpfszM8HQ+xlrMHcPpWEWd/ZrIRm4CRl6yDVmJb0xQ3RQ9KrUAcmA65y2yQC2EXEUtm55S3xZQPRxOjrBdQbYHvlp0ZadoIfwfryP6zkmOjHGAiOZUO9B05HoNMjrsKzS2pcV9f9fiv89zd3pCKUKLlPu885cIlLF4B2kZZf1ubI5u5pTW4GS7Vb6a8uVY1AL+LkFu0jlBQkes/ImVNAbPX2qkYS0z5/RiBtoOL3/1fTmlo9NqCv8iKcHLfT9h/kH8rqdqEx3E99NteIJ2ZAJV6Mbp9C6xtRxgnIt2cUoDbpKlnCiiiiruYJffjUD3WdjsM8MiKPHIt8xB57/Uuo1uDSyNrCUwvzgJe4wTmL/DMf338fJ0WGQ9Q/qz99z3LIEw52HLuniVJdnVP2D/3vbAcM5hPk+sTzjmNgPVUaiR8VQfoPPwRQpu8l+2zc3EWhQTbMd1x7a6kybiIZIWgGGoPL3kafYX3PFcq5Pt2/ShU4Qjki5sOspz0/22ByK9bWf+XvOja+BEgPDK2Wn5Mx0kSUWnUfqT+BFhCwM4fgg4Ct7fqM8wvowedQO3FntEWYavV2GczzPf7HDHqHWVbuLcfpkwC54xYEUcOwEiV5G1feazT5fyW4Ssg6luPkG7ynsrP+RUpkeibBrxZfB6OC5wNVminglJIDoMntliQjJzsaUPBmS7ByWkb4+eZk50FKWkyvRz3mC26JDt2Ep9fAejr6gsgexkFMYnkUrxF546MMHhrN8FLEfx1LJF2cCk7AoeSrRd/+k9p4ELgnRhFX54zHPqZekDNQreynCkAm1vNNXVnUTHeHqJHgttJoCivM9fVyCg6P3zoWWdVbC/KeQHgIEfzCKFrYXtXyqXIXsb0qxG90SoLWdBuIb/6lV3Ln78u/G9T5D/trg96svrr48AvDMtNm3m+fJw2758My6PN3eYn0/gDSF9cuuF8iUjBqeDow9mzPDqfm9eb1hMP4/JibPFmjEb7J26Tmd+0/H9p0efqc7qq+UBzrlmz8p4o4NzWF0Za1sWOlL/ZLY9kc9q56J0FIdtrFJZrDioX9I4ARSQiERrQDcSqlpWAHQ1b1hugy1VaGa+TSAjrCzdOvqQXAAutod1ZS8CZXG06xn93fw0a/biSvifRwKECNV5dPDJ/OsKLqb1WuY1NOe7Uc6KEzVB20eV5qLuuE8w9Z+wtJqhN6OunOHPpMBHh7z8e8Rxxdj8qfkPf6wp8ZbFxn1ZL9tOcQup0nsNFWDNkvubbPjzpV4RIp5qhf9c3gnCVd95SM8Qt+5z2ILYhlA1R4eA7RhtnIR0F4Jxb0IEgWWjqcK8Or78lc/JplECVNm0ngFxauriUDA5M5B2TM7XDYqP7tjQq9eIy5xx9coBMlxKv97evkZ0fpfUhc6DZqoZMtDpt7FtdAayjIJXUKMPpeHjrt4UYZ5ymzOhCt3sz8Tj0OnRIkDmF9/js880nURrxXWzGQhVuHiLoZn7lV5pSWzKnUL5Nz/GFT80TyLoiZL/D+GGHpYawRbCC8qA8lmFs+rNXtM1rDDrPgcLSGGdrNGEZIcmO4SBoQ36nsmbx+hsQhLhx3+QsWlhAp1/9HbKBu2rG3iUR7h+bHUzLXckc16BYsiVxu3eRuonz+dx7jligEXXDDT3a0kksxZMvoaYqGuUsPPnPGapDOgakerA7JYzl1B2/CDEnZZdYIIOXpJMZuFcTDsg1jU/rtTa7E7G958wLYWoEkFJ4FXxefRlL0XueEKdlRP4lfrVS/xMlc/e9GCsGOHSqRImFn6efunAUkb75SvOcX0fp9LWngc+aYHsESYaIkoJLPeDr7lO1ZYdsv1spvN9Q01CIKoqR/R/CFPqlXF3xZMS0ty7j4EfwchFyfk77XTHJ2szLOlCKthlIT4AyfnwPbYRixcGS1F2+lUKXxiSiU7fPbj3cFEwZGowBKxogyVM/U3XxwN3S8smcoTScBQmkoGidZR6FOBNSzxQ/25lqvUSTqQjWAyJh4oYLIamxTkvHM4mLj4lyhInSv6OJRDNlr8PT0Eug4l5osHmOR3bzuC271am6gXpHRtDWf4Ru95gDPKWJvKlfH4NDyjVT8vlbTVMv7RaQv+tEeWp4by1ww8eUo7Jzy6VoedQqEEwImz1aCbE3qktmtVWXPBQYw8T4LGZ7C09ln2a/+QUYy5teICnls/ItTu8gWf5Ci7n9gvFK76qudouwK6QHKtTwBPNmu+k1z+aCNgakh9N32d7kB82H9dXglNBo0FBM4H+jx2T3pQjA3NK4D/z1nt6WCQ2jI6YTmYMXgyyZOqW91P+tEWCHW2dU95pc7iZD650Pg0x9CmZEKs/6OuHhlc6n4EGX3M20YtrQtMi98IMer7iNaxiESbqJcBdWLjKpS8dOhQZrezxh8jj0HG+uEbhJB1Pz2IcXILn0w73DT33KfnIOE1RpdVs1eEh7Mkzr1zFPFWxcLIcb24xnE/kfKPduE0tKK8cikb8s2eJcLDedp5nwLxHI2RYB53zpbxBt5zRKzQWch+JA/5TA2Kg2nbrmVh54Aj1aWWrrTEEWd0P9eoOz/zNZtIVYFPlopTrAxKWkK5NfcjBjAelZ0h8Cz2/D1S6nHFAeAk3cb+6s+QGY1n12/I5qzLIo7ewgb+DUaudGAo+nF0mePXcapM5fjpkbce/AfAzwyTgmytFaXqNT9/VuQp1hDICoc4rr+lazSthnju2Q69+NFx0z9xDm7cx384rHv4dQ2I+NbnBeu9Ud1qH5bzumbfkTOln15jbUQQDCZLTK9bmpd8Uo4zGI9cWywfGttKjJ9zUBXrckC6jBKSQLwJOPSVWPKq3a7yYD8ORs5oEojaVEYjTQiRKTyVxlWVQlQfjC0+OBZu8s/gQeuuKs28h7GDD0dM7tYfxEvuDNxX5fD3Ny2tip9QX3P0stghJ1W46FPylBi3tZa2YwsIPeA6JklHe/XAqFpN/LbUslDdEfKvhx+fVe1faXjsU+/hdTcnLpnM8Xo7zb/V3PezD3vmKmWMFpciSMGXqID9sgyKd2zi0vQ1bXRhm8xtGJbErtuKkA5CCDvS6L3XOmvjF/R99fQ7mDsrqeZcDp85Rj8WJhqihtX9hEs98gScBrvJ5mq/xw8MexqlFCFMNiilgI5HbM1tbAUgcnPWQtiLbYyuGDxQZuxTz81LaIN4a5eKHKolntnstCLHBt1M+Z0jf7uq4sTqQJ1ZQacWTe2bitEOIhkDNyVaOfLajvhBG+UNDWrTWyZYLltlR5v1OUtZ1PD9ch/SqiMW/Yek8c4SgeGhFBNwFRN3uethdF2cVy/VB0bdykMIrZDMyidL8PaAkJaY8Fqk+Dqs+wnEK+CvDbeZgmqI7mdiG2RXVB6BznlAeAAN1/KhRgAfZcx1MrzSOkw6XYjGOzPsalB//0W2KZjzJKR232XdA/Llbr6xzMV6GvveXwIczpzpxMfLQKO3PXM5a74oJA5nlPziXz7HjoNOHFNW/Cm9CgXHox7cE9/xXVgboWEYXpuovaRVZXNTd16azNj3B0rMWX3EDLTukVj+BBSWbM/AOQb4Sh9/KKhpk8Eos8CPjrMDRzmS/RK3B+7MBcIqtLAdbSgmp8bSKjEpiHXMWoHb3UEDHJpnTcqV1j8BOafbP3DReIXYP4HdC1bz6jWXx+kDwS9vLy1vvOYs5d0gb3M7qKyRAqLhXdAbJw282+4tuZnbaSSLW6PXeik26c1DfR5kRWPxgdXubveJ2Ta7ocaqdmcvAsK2sbCodWfc38xejQtdQBjwV/pp+aGtzvFGSlKMuhK7I0CwGqWFDeAZHvxiqoVnMoEx2oAkapIN+XbjTbyQiQkArNVeGm4rtxfkZpXbxR8Ualcm9enCKBHTs1lNRMvHwUTMqDCIOSa/JuoFxM2xf5URDZIvl1ieFN2vhZvJKU/Lp90nu6AiPGCBBi6G3vxxFcRglj3Xi+5RK+TWP+OqTJA1MRhTv4rNCdGlePvEakjMUwD0gr7fAySNrlBsaSK5R/x8gstNmNnU0sk+y34+3nz9sviCDiVzwJPcLbY1qRz4NW91y1c6YVb7/K2SlBWFKewZBgV6PRtsICjPidX6MmxGCq3L40u7//Lzvp9JhnH3lBA6k3jyU6Fm2HfXPvBFxrQ3+bxTM4buhJqXxAWiVUxpf7q65na5jFPmFDst9a/7eacph9eRIu/bkO5tZs9ZO43eNu6VQg3BfTEtMAueJPg+UZGZp1N0UbBjQeSgVe+TyxNyvwHar0ZzxdM9h87Py8qpykUBNhMFYyB18tqYmv0/1WYwtKyDRIDBElLliEFd40XJlv+9gKnZfzLHkxUAZ5lq4TTiAzR3h1BcyCGWQ7nXG3/Q8FhA2AZoR4v0N1rdlCRzfUkHxk2KU420ujH4+4A6ipZsZ3RcrCjgTubENCW0PrkjdnsVvxZFRSGU6dl4guCgg21GV9ZpPnrsBEmFgGmoFvOYwebNk38xDY6DKDPiu9iBG0wbgLjeJ9oILlxNj1YPqoIEtbdAZ+HsfHI4wIM+HUjxQGdw5u0/6Gxz8XjQhfSFpQndGGUMJXyKYyHig1Dw07CQJI3cptdGaegDWhrk9MNuCVy7CKgxbMU+cBNDvj/aNEMWKJ0p77wddo7uhhNN2idxryLMKj+A/ZZPLb7uCzJ0xLencnqY+lZd+LHz7LZEf/Oeq/fJt+aqrgllgvQAGrmw/Os5N8Pd8lSjeV3tz7VVPC0+SXx0IgV0JeXhvEb85b5Yr4lUEHmASlXKTJFjsZPxSqq/J1P7WVvRkdeI2csh/c2FjGQrAdc0DcRf872hFlOTTccLTTAk21oaMma7jb8tnyu9ymTcojHza2EKYLlfNQGZqJupfx3auFY1cmo3yMeFh0+pXdshNnVuhN/P5233MihMa8yhNK1yNHsHBoRD7Th+KFWG5e/EjcafUCo2Hn/OIr8O9iWWPHWpWBvQ3bK5AMtvxZq0XeHaBlTkYXHgtclnoAupqm/xIcxNz4WPgv2iwmJEc+ZJidi9BwYXjX5WokIIMa7xaGseCcYEQw5sLz61pQuRm94NeKNaUsZOBKzKcOZnvWyDj0SKcEpxRZb4B5tj7FP1St3+XSsNebpo7VoBwkP/hzdc/MMYDekjdrQDPL7oSEabMRWaAYqNiZcjRq9qoxZ435mRieVhCQ4C/2GFAaQlWAn5KYEG/McaySZyobvlO9r+abpzmLlHlxrvuGBqF8NG9BqX1Mqdt8Fbc5WeJoIWIh6BYge2k/j7kSvdClYw+AK7o8luK4KGRZgjkTC3VJrXKj6yn/eY2pcJef5Xu58xIZ4ffAsJusv5Bn0TI28PqV8MkblyKfqAow5KFjShLm4QUnOxyEFqZAmJnF3g2vQNSuvuablSpfelfAk36EduQQpYRX2iYMeRc3etquejiZ2Qj9B/ZACJy6cVNRQpweEFXLefUnLpMq/C5uKqoN+Ud5T7XLDGlTPRb/p7iGFkLPHqxdFatYpppG+7sdw3F9Tzh9s0GEvCjnQLYyxL9l4Qv0BwTQXFurEaAnnN+xx4JY+ieKc0yTl14KqqnAs3a8X9RnsJDfTgQwOAQwk8N0v1EgPyI8+izVOOWlCiI480akd8fIjcpdPCvlm2eBhxc60vkRs5nZGyrYStZZ8qzkq/TcPDzKTO5YEm4drqGIC923clxRKpVRqhEg0TyJsJ8Sat56FHaQmfznRzijea7CMq43NyM3DAO39Jp8c312KQuvUQfCsI6w292j6chX+a1GItlfG8+1ABEAKwJc4ImviGPdqtU5BpZfLaON5eN3GuoNlKykI+l1sNy33bLSo1ceB7XWRK+69KVfR25Fsf9jUbUHR2e9W4IdiRd3dggCq7rwVoF5fBxDYvMbVB9XsTwsI4/qD1IghqVAyITp1ldRRBMRHUoWtRqnwWRu6rZsCZV0P5AxqhNxZsizWOFtrEaDcE9mKVMHg+QP/+6MVa7Pm+ovKUN9K41IPA7+lXzmDDARf1plsN1oC6igluystSZGybT9/ztXLCCQygF8EyL/fEjNAUPkhbAWI57iLQ1k1Y6FbKDngWrZqwz42xQs6QyGW9dNM7Dx/BdPuZLBKwfIcThawDNrE2AjLHnNdrnoA7YZxe4qq75kEJAgLRcl5s0tA5wzXsYP1k8sEuv4eg8dRdhpsNVV70EO30AfC+XHCEan37MDR+M2RafbO2cSqc5i8wobHEqwC9AM97LZwX7KsqeamM/PaHqdfuNJbMvBj5V1DBX1ZHDMJige1xvFc+MxLl+wRI6kP8c4VSexkOIuRnzf0dcaT3rmR0TXlTSmzN3HSVIaxhQPciTY86wB7Rv/vaUBKKX98lxV2fMtXVanoxX1vNtWQnyPcD7b47BK66sd49Q3ZljfbteeaiccNYsXirdtCM6ZjZDuMY4jXof0mLWhu2TQPk5ItIzWGU1U4c5vNdWecQGeRSMcTIbMqgjGgdcWt9H7x/pZTY0cBkQUVQ34q4bLSy5tQrkzffbaXKxfcLpxfE2aeubwomxYKsFjlguIdQHmPk1MWNFQseHWO0+nRAAL5RoUJsZXUVK8Wr8xYxU8xyqaaICryHgT3vLhcRjoasaTr3m3iAQHQfwG5tz+C8q4ukANaBhXVl3z3PXv6DIoDq/CPcR6NJnyKK1x5g5r+rrsmq/yTewBhoS+J1iQHAEzOEMCzm+1t9HAFMBWzPPGfxsg5agfEEp2xegJEDNTSpzcIhZNG7G6vWlcMfeqZYBF8IJtUZksiGPvT6y4I/CJrFKM1JACTlHkTMJp+ik4MrCPtZ2hutoe1LlCQRdcPupFGjrtwILhINwN0mYo0dkriM7ileD0u9usWjg6tuU6bWhjDskmkHEFDc07cuhNMCYsWZyQoQP/SQRBNJSp7tPFVWQj1Jd2Jn2DJ8oxrNJUDSXyCkYLFXpmQyy4R2PeDn3t++LwQb0ryd3/9tFT13UgTTlY/yyHILnpwmqjInE9cpaJhXfS8g1zS87Z9yr+IiERqULzpyIWaVsSToYvU787qBhFyLdy4hOqs9f2wpgolnkKZtZM/xZi+Mtb8jzWN+dMWypMOXHGRfojP5ZGhImMlbNEPouA7xFWlyUN01EQFULFZwrf85puHaRMbGSHhsDqGLHSnv/DajToTwUA9S6yofHvJuD8BUGSLl2y9B+MbtK/JWkpIBlox5P/yv1YHocHT2ISZtKxwY2gAImiFiGuTX91nTsZ0xB+ht/ElvcPQuhVvfu5tQLWpn7vftUO2tzIEU5ppaAh+r+XV1+Hl8T0LcYo+VAWBaqbnOlok+kylRzA9kKAFjbJ6CAjgkmtFAbwqxo3ruEIj5vbc4TRVx4uLTMPVXQKh51fyd4SzLYB2KXumDmxRKnuyZBh6HmY6vbsO3pjursaXrifEt4iaPhu5zoK4sudRiJNxGzt+3dnaB6LR72Ia89GyzDlEevBru8eWJTjh6rBmIWd5w84/lQ97n8ePWXbb1cq1d42XWiLlP49E9YZSO7CS6zYaPRtiJ8eJXIUfoRw+Rc7QgfzV4OK6VA4G27L8GYmnn2EGJGSTI6Q7fG4BbXYGMO+wADc8Or3lmHoEg2LsBu1FkDTvQ4QJ0N826NT1uzq94JlEhu+sYcF8oUJ4vUsKpFbdKoN7EJIfuOK3MmvAzvu+2doeFr0BmfMAY9FKJHUQK802V3RZEN+WPTGuCdJ5JDPEhg4krSQrLJ/Qawr32rIoAblVtzUmr5+n3bIMVURiMVn3tqr2M/qH8ymEQWaYb4mQwuksXloIscHaSAs7ghCzVWCY1FkjAEHwnYR3ikOJrkw4ZLRar0U5NQiCOk6FuXVoW9P0iTqNdoTTceXQoeUdRNKPGJofqlS+c9Xp69S4Zg4qM+2G1cG3s71yTrj5fWqIv50mj1nQQtJW8sKf5nuaWFHg7EZBuqZYKZKFJ1WtKuekTCUD91oNRTqdWoZyaNTMgudaSG6Dgz75oMWd+ZM67j2T6VMWq9NmJ4UOG+EE2H5axPJohF+sdG3W6cwDxFx7GGLOxnfBxEHTjh5O5d+RTzycCoaXx21Fakh5y7MkrpNMyJg8CFUyXrp78l5DEMhPieOGhEYAIvnf6Zw6VkYFPDhhF8SJnWdrTKAje9CXUGfVhCYUTjMlqx9BJK6KZRQ7tZC/4NYtndf3TRpDelljn/RaykOG3HwVKk6k3oX5gmPBB9MTeUeLiGA/7IImLR7zXm0oWs10d7Ap89jhGBLtkWNvC76mA20iddf+2JL/n/KgJtuzrtiojCtErEpP3oDnz9pC07n95iZyOYsSeF9irOHTr1K7ufMG7QCMoSWFSTNqQGtB4dDQ22rm1YYYhwZZGlj4kBZNkC4OMgg75auASUJ1NBT/tTObUQXqGCWMT9RvGDVW4YaLG2zaBvjY8UUPXjBf6FtNZcFxFuPztcXC/aKyKuIfP/rx8FgixseXws7wxms75CZgCG3iQbR5JzeKCM7LgTYmxLCMftuKOfx67nBJSP6h8NXOgIc89NqZpMBpQBpZoGYKtw1mxB74l7UX7CpJJiNvV0upDhzmvb6TuHC+gCuySyMmVcQYI1EZyJaojMnjSjZX7BM6PS4nR/iQasA8Y50JrhaLijG8k12TqQdGqp4Vn+lOMEizQm/wCoFQXHUNaCQUSjVj1141HScZMhfdOGeLjmT8nRLL4A2Y7wYwWdc8FuRiDvckfUhmhjGMDUar9GSID5+SzMyh5MjzTt+LhZZmFBdkGJZ+RJTrwW3FgPLnZGMomnM1g+OxBruBNr10V//nnL0OsIW1GTZQWuJ7PtsYMJ1NCgyw1K6oLNRjjF5mee/+7Q9dGYYwTngczZuf0jVUBgR1HgbfPt6Pi+YH7r165TQPMl4ekXmB2LLpe8NLtXuVNoiFCvMu3Qv0xWQac5a0/WEVoiCJwZHCeEf1dt+cxQ3SKtzC/rWtRQxzk2rhz9WWZHKyxysYPvOSX5lVco9v5E2hxvLX0t/IaPw6SWzEhEmJEV5SDtNw+2sbPepOg764x+y3PuIAizBvk6Evp7JKdeUG9oG1eTLWSp/AfNwE1wQDw+J/FndpnO3vKQzPvjE/GCuWxXuZRQBx0nCSqaA2p0nMkSgDPfXlR+MhZbDiyEjoiEgQ820frAOXV2iuzkli7GMQXwj2ixnwVSZtzl2cH/gC3p7RsgiH9MVij4zAczpyBYnHzDzpIH83kYn2dHequlWzp4LdteKGeaAqpuTJPY3XNkVERRlSQaqSYuEZO0K669ltyJ1rdXDV0QukWYk/aJcBrcz6sEmB/4s2Xy4uawHsMgksohLBgZEeIhWwP3S8e6gNzAwLvjj4YFg86gh1iEJWitHEHJ4YYgBl6uLMc9vb+Av3YsJSdKAXqwjozbwzPqWMBJwzMrllW8EuJtES02nupkIf7ofLCppgHpCtkzYBnCOGuBHrT29fGzOfwoMG+XclIYAPat7q/L+KefwyY1gAIWSnK3kkh/mSqzQQdYHqyCuRG38c+w9u3w150zKkyQWpxTG3eFDInMsVU3VA3oKczsWvA3D6iU5w3Tr/0SJVihaQeaccXypudymDsuXw9rvtqdM0bnEeXB246ZmHn9KItHdJqwiKOXwm4oaVmjc+efuFcquTB++bRYDOkiIoOw0HFhcReLnGw4AEloxtAbo1+JZ009GKrivhLV2/+OwD9m1yLX/Z5TWdIuvE3XPkB+HZhxOagAAAAAAAAAA";
+
+function useCollection(name){
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    if(!firebaseReady) { setLoading(false); return; }
+    const unsub = db.collection(name).onSnapshot(snap=>{
+      const arr = [];
+      snap.forEach(doc=>arr.push({id:doc.id, ...doc.data()}));
+      setData(arr);
+      setLoading(false);
+    }, err=>{ console.error(err); setLoading(false); });
+    return ()=>unsub();
+  },[name]);
+  return [data, loading];
+}
+
+function Toast({msg}){
+  if(!msg) return null;
+  return <div className="toast">{msg}</div>;
+}
+
+/* ---------------- PIN LOGIN ---------------- */
+function PinScreen({onLogin}){
+  const [pin,setPin] = useState("");
+  const [error,setError] = useState("");
+  const [config, setConfig] = useState(null);
+
+  const DEFAULT_CONFIG = {adminPin:"0000", staffPin:"1111", stampsGoal:STAMPS_GOAL};
+
+  useEffect(()=>{
+    if(!firebaseReady){ setConfig(DEFAULT_CONFIG); return; }
+    db.collection("config").doc("settings").get().then(doc=>{
+      if(doc.exists){ setConfig(doc.data()); }
+      else{
+        db.collection("config").doc("settings").set(DEFAULT_CONFIG);
+        setConfig(DEFAULT_CONFIG);
+      }
+    }).catch(()=>{ setConfig(DEFAULT_CONFIG); });
+  },[]);
+
+  const press = (d)=>{
+    if(pin.length>=4) return;
+    const next = pin+d;
+    setPin(next);
+    setError("");
+    if(next.length===4){
+      const active = config || DEFAULT_CONFIG;
+      if(next===active.adminPin){ onLogin("admin", active); }
+      else if(next===active.staffPin){ onLogin("staff", active); }
+      else{ setError("PIN incorrecto"); setTimeout(()=>setPin(""),350); }
+    }
+  };
+  const del = ()=> setPin(p=>p.slice(0,-1));
+
+  return (
+    <div className="pin-screen">
+      <img src={LOGO_DATA_URI} alt="Barbozza's Pizza" style={{width:120, height:'auto', marginBottom:8}}/>
+      <div style={{fontSize:12, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0.6, marginTop:4}}>Ingresa tu PIN</div>
+      <div className="pin-dots">
+        {[0,1,2,3].map(i=><div key={i} className={"pin-dot"+(i<pin.length?" filled":"")}/>)}
+      </div>
+      {error && <div style={{color:'#FF9B85', fontSize:13, marginBottom:10}}>{error}</div>}
+      <div className="keypad">
+        {[1,2,3,4,5,6,7,8,9].map(n=>
+          <button key={n} className="key" onClick={()=>press(String(n))}>{n}</button>
+        )}
+        <div/>
+        <button className="key" onClick={()=>press("0")}>0</button>
+        <button className="key del" onClick={del}>⌫</button>
+      </div>
+      {!firebaseReady && <div style={{marginTop:22, fontSize:12, color:'#FF9B85', textAlign:'center', maxWidth:260}}>
+        Firebase no está configurado todavía. Edita firebaseConfig en el código con los datos de tu proyecto.
+      </div>}
+    </div>
+  );
+}
+
+/* ---------------- INVENTARIO ---------------- */
+function InventarioTab({role, showToast}){
+  const [insumos] = useCollection("insumos");
+  const [productos] = useCollection("productos");
+  const [clientes] = useCollection("clientes");
+  const [sub, setSub] = useState("insumos");
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [selling, setSelling] = useState(null);
+
+  const list = sub==="insumos" ? insumos : productos;
+  const colName = sub==="insumos" ? "insumos" : "productos";
+  const sorted = useMemo(()=>[...list].sort((a,b)=>a.nombre.localeCompare(b.nombre)),[list]);
+
+  const CATEGORY_ORDER = ["Pizzas Clásicas","Especiales","Tortas y Extras","Aguas Frescas","Otros"];
+  const grouped = useMemo(()=>{
+    if(sub!=="productos") return null;
+    const map = {};
+    sorted.forEach(item=>{
+      const cat = item.categoria || "Otros";
+      if(!map[cat]) map[cat] = [];
+      map[cat].push(item);
+    });
+    return CATEGORY_ORDER.filter(c=>map[c]).map(c=>({categoria:c, items:map[c]}));
+  },[sorted, sub]);
+
+  const MENU_BARBOZZAS = [
+    {nombre:"Pizza de queso", precio:99, categoria:"Pizzas Clásicas"},
+    {nombre:"Pizza de peperoni", precio:99, categoria:"Pizzas Clásicas"},
+    {nombre:"Pizza hawaiana", precio:99, categoria:"Pizzas Clásicas"},
+    {nombre:"Pizza de pierna", precio:150, categoria:"Especiales"},
+    {nombre:"Pizza de boneless", precio:150, categoria:"Especiales"},
+    {nombre:"Pizza de camarones", precio:170, categoria:"Especiales"},
+    {nombre:"Torta de pierna al horno", precio:70, categoria:"Tortas y Extras"},
+    {nombre:"Torta de pollo al horno", precio:60, categoria:"Tortas y Extras"},
+    {nombre:"Bote de chimichurry", precio:80, categoria:"Tortas y Extras"},
+    {nombre:"Agua de tamarindo (1L)", precio:30, categoria:"Aguas Frescas"},
+    {nombre:"Agua de jamaica (1L)", precio:30, categoria:"Aguas Frescas"},
+    {nombre:"Horchata (1L)", precio:30, categoria:"Aguas Frescas"},
+  ];
+
+  const cargarMenu = async ()=>{
+    try{
+      const existentes = new Set(productos.map(p=>p.nombre.toLowerCase()));
+      const nuevos = MENU_BARBOZZAS.filter(m=>!existentes.has(m.nombre.toLowerCase()));
+      if(nuevos.length===0){ showToast("Tu menú ya está cargado"); return; }
+      await Promise.all(nuevos.map(m=> db.collection("productos").add({
+        nombre:m.nombre, precio:m.precio, categoria:m.categoria, cantidad:0, unidad:"pza", minimo:null
+      })));
+      showToast(`${nuevos.length} productos del menú agregados`);
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const adjustQty = async (item, delta)=>{
+    try{
+      const newQty = Math.max(0, (item.cantidad||0)+delta);
+      await db.collection(colName).doc(item.id).update({cantidad:newQty});
+      await db.collection("movimientos").add({
+        tipo: delta>0 ? "entrada" : "salida",
+        itemTipo: sub,
+        item: item.nombre,
+        cantidad: Math.abs(delta),
+        fecha: new Date().toISOString(),
+      });
+      showToast(delta>0 ? `+${delta} ${item.nombre}` : `-${Math.abs(delta)} ${item.nombre}`);
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const saveItem = async (form)=>{
+    if(!form.nombre || !form.nombre.trim()){
+      showToast(`Escribe el nombre del ${sub==="insumos"?"insumo":"producto"}`);
+      return;
+    }
+    try{
+      if(editing){
+        await db.collection(colName).doc(editing.id).update(form);
+        showToast("Actualizado");
+      }else{
+        await db.collection(colName).add({...form, cantidad: Number(form.cantidad)||0});
+        showToast("Agregado");
+      }
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }finally{
+      setShowForm(false); setEditing(null);
+    }
+  };
+
+  const deleteItem = async (item)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection(colName).doc(item.id).delete();
+      showToast("Eliminado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const registrarVenta = async (item, cantidadVendida, metodoPago, clienteId)=>{
+    try{
+      const qty = Math.max(1, Number(cantidadVendida)||1);
+      const precioUnitario = item.precio || 0;
+      const total = precioUnitario * qty;
+      await db.collection("productos").doc(item.id).update({cantidad: Math.max(0,(item.cantidad||0)-qty)});
+      await db.collection("ventas").add({
+        producto: item.nombre,
+        cantidad: qty,
+        precioUnitario,
+        total,
+        metodoPago: metodoPago || "efectivo",
+        fecha: new Date().toISOString(),
+      });
+      if(clienteId){
+        const cliente = clientes.find(c=>c.id===clienteId);
+        if(cliente){
+          await db.collection("clientes").doc(clienteId).update({sellos: (cliente.sellos||0)+1});
+          await db.collection("compras").add({
+            clienteId,
+            clienteNombre: cliente.nombre,
+            producto: item.nombre,
+            cantidad: qty,
+            total,
+            fecha: new Date().toISOString(),
+          });
+        }
+      }
+      showToast(`Venta registrada: ${qty} × ${item.nombre} — $${total.toFixed(0)}`);
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo registrar la venta — revisa tu conexión a Firebase");
+    }finally{
+      setSelling(null);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="section-title">Inventario</h2>
+      {(() => {
+        const bajos = insumos.filter(i=> i.minimo!=null && i.cantidad<=i.minimo);
+        if(bajos.length===0) return null;
+        return (
+          <div className="card" style={{borderColor:'var(--danger)', background:'rgba(179,38,30,0.06)'}}>
+            <div style={{fontWeight:800, fontSize:13, color:'var(--danger)', textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:4}}>
+              ⚠ Resurtir pronto
+            </div>
+            <div style={{fontSize:13, color:'var(--char-soft)'}}>
+              {bajos.map(b=>b.nombre).join(", ")}
+            </div>
+          </div>
+        );
+      })()}
+      <div className="subtabs">
+        <button className={"subtab"+(sub==="insumos"?" active":"")} onClick={()=>setSub("insumos")}>Insumos</button>
+        <button className={"subtab"+(sub==="productos"?" active":"")} onClick={()=>setSub("productos")}>Productos</button>
+      </div>
+      {sub==="productos" && productos.length>0 && (
+        <div style={{textAlign:'right', marginBottom:8}}>
+          <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:12}} onClick={cargarMenu}>+ Completar con menú de Barbozza's</button>
+        </div>
+      )}
+      <div className="card">
+        {sub==="insumos" && (
+          <>
+            {sorted.length===0 && (
+              <div className="empty">
+                <span className="ic">🧾</span>
+                Sin insumos registrados todavía.
+              </div>
+            )}
+            {sorted.map(item=>{
+              const isLow = item.minimo!=null && item.cantidad<=item.minimo;
+              return (
+                <div className="item-row" key={item.id}>
+                  <div onClick={()=>{setEditing(item); setShowForm(true);}} style={{flex:1}}>
+                    <div className="item-name">{item.nombre}{isLow && <span className="badge-low">Bajo</span>}</div>
+                    <div className="item-meta">{item.unidad || ""}{item.minimo!=null ? ` · mín. ${item.minimo}` : ""}</div>
+                  </div>
+                  <div className="stepper">
+                    <button className="stepbtn minus" onClick={()=>adjustQty(item,-1)}>–</button>
+                    <div className={"qty"+(isLow?" low":"")}>{item.cantidad}</div>
+                    <button className="stepbtn plus" onClick={()=>adjustQty(item,1)}>+</button>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {sub==="productos" && (
+          <>
+            {sorted.length===0 && (
+              <div className="empty">
+                <span className="ic">🧾</span>
+                Sin productos registrados todavía.
+                <div style={{marginTop:12}}>
+                  <button className="btn btn-secondary" onClick={cargarMenu}>Cargar menú de Barbozza's</button>
+                </div>
+              </div>
+            )}
+            {grouped && grouped.map(group=>(
+              <div key={group.categoria} style={{marginBottom:16}}>
+                <div style={{fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.04em', color:'var(--tomato)', marginBottom:4}}>
+                  {group.categoria}
+                </div>
+                {group.items.map(item=>{
+                  const isLow = item.minimo!=null && item.cantidad<=item.minimo;
+                  return (
+                    <div className="item-row" key={item.id}>
+                      <div onClick={()=>{setEditing(item); setShowForm(true);}} style={{flex:1}}>
+                        <div className="item-name">{item.nombre}{isLow && <span className="badge-low">Bajo</span>}</div>
+                        <div className="item-meta">${item.precio||0}{item.minimo!=null ? ` · mín. ${item.minimo}` : ""}</div>
+                      </div>
+                      <button className="stepbtn" style={{width:'auto', borderRadius:20, padding:'0 12px', fontSize:13, fontWeight:700, background:'var(--tomato)', borderColor:'var(--tomato)', color:'var(--mozz)', marginRight:6}}
+                        onClick={()=>setSelling(item)}>Vender</button>
+                      <div className="stepper">
+                        <button className="stepbtn minus" onClick={()=>adjustQty(item,-1)}>–</button>
+                        <div className={"qty"+(isLow?" low":"")}>{item.cantidad}</div>
+                        <button className="stepbtn plus" onClick={()=>adjustQty(item,1)}>+</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      <button className="fab" onClick={()=>{setEditing(null); setShowForm(true);}}>+</button>
+
+      {selling && (
+        <VentaForm item={selling} clientes={clientes} onCancel={()=>setSelling(null)} onConfirm={(qty, metodo, clienteId)=>registrarVenta(selling, qty, metodo, clienteId)}/>
+      )}
+
+      {showForm && (
+        <ItemForm
+          initial={editing}
+          tipo={sub}
+          onCancel={()=>{setShowForm(false); setEditing(null);}}
+          onSave={saveItem}
+          onDelete={editing && role==="admin" ? ()=>{deleteItem(editing); setShowForm(false); setEditing(null);} : null}
+        />
+      )}
+    </div>
+  );
+}
+
+function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
+  const [nombre,setNombre] = useState(initial?.nombre || "");
+  const [cantidad,setCantidad] = useState(initial?.cantidad ?? "");
+  const [unidad,setUnidad] = useState(initial?.unidad || (tipo==="insumos" ? "kg" : "pza"));
+  const [minimo,setMinimo] = useState(initial?.minimo ?? "");
+  const [precio,setPrecio] = useState(initial?.precio ?? "");
+  const [categoria,setCategoria] = useState(initial?.categoria || (tipo==="productos" ? "Pizzas Clásicas" : ""));
+  const [costo,setCosto] = useState(initial?.costo ?? "");
+
+  const submit = ()=>{
+    const data = {nombre:nombre.trim(), cantidad:Number(cantidad)||0, unidad, minimo: minimo===""?null:Number(minimo)};
+    if(tipo==="productos"){ data.precio = precio===""?0:Number(precio); data.categoria = categoria; data.costo = costo===""?0:Number(costo); }
+    onSave(data);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <h3 className="display" style={{fontSize:20, marginTop:0}}>{initial? "Editar":"Nuevo"} {tipo==="insumos"?"insumo":"producto"}</h3>
+        <label>Nombre</label>
+        <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder={tipo==="insumos"?"Ej. Harina 000":"Ej. Pizza Margarita"}/>
+        <div style={{display:'flex', gap:10}}>
+          <div style={{flex:1}}>
+            <label>Cantidad</label>
+            <input type="number" value={cantidad} onChange={e=>setCantidad(e.target.value)} placeholder="0"/>
+          </div>
+          <div style={{flex:1}}>
+            <label>Unidad</label>
+            <select value={unidad} onChange={e=>setUnidad(e.target.value)}>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="l">l</option>
+              <option value="ml">ml</option>
+              <option value="pza">pza</option>
+              <option value="caja">caja</option>
+            </select>
+          </div>
+        </div>
+        <label>Stock mínimo (opcional, para alerta)</label>
+        <input type="number" value={minimo} onChange={e=>setMinimo(e.target.value)} placeholder="Ej. 5"/>
+        {tipo==="productos" && (
+          <>
+            <label>Precio de venta (MXN)</label>
+            <input type="number" value={precio} onChange={e=>setPrecio(e.target.value)} placeholder="Ej. 150"/>
+            <label>Costo estimado (MXN, para calcular margen)</label>
+            <input type="number" value={costo} onChange={e=>setCosto(e.target.value)} placeholder="Ej. 60"/>
+            <label>Categoría</label>
+            <select value={categoria} onChange={e=>setCategoria(e.target.value)}>
+              <option>Pizzas Clásicas</option>
+              <option>Especiales</option>
+              <option>Tortas y Extras</option>
+              <option>Aguas Frescas</option>
+              <option>Otros</option>
+            </select>
+          </>
+        )}
+        <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
+          <button className="btn btn-primary" onClick={submit}>Guardar</button>
+          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
+          {onDelete && <button className="btn btn-ghost" onClick={onDelete}>Eliminar {tipo==="insumos"?"insumo":"producto"}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VentaForm({item, clientes, onCancel, onConfirm}){
+  const [qty, setQty] = useState("1");
+  const [metodo, setMetodo] = useState("efectivo");
+  const [clienteId, setClienteId] = useState("");
+  const [buscar, setBuscar] = useState("");
+  const n = Math.max(1, Number(qty)||1);
+  const total = (item.precio||0) * n;
+  const clientesFiltrados = (clientes||[]).filter(c=> c.nombre.toLowerCase().includes(buscar.toLowerCase())).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <h3 className="display" style={{fontSize:20, marginTop:0}}>Vender {item.nombre}</h3>
+        {(!item.precio || item.precio===0) && (
+          <div style={{fontSize:12, color:'var(--danger)', marginBottom:8}}>
+            Este producto no tiene precio configurado — edítalo para que la venta cuente en tus reportes.
+          </div>
+        )}
+        <label>Cantidad vendida</label>
+        <input type="number" value={qty} onChange={e=>setQty(e.target.value)} min="1"/>
+        <label>Método de pago</label>
+        <div className="subtabs">
+          <button className={"subtab"+(metodo==="efectivo"?" active":"")} onClick={()=>setMetodo("efectivo")} type="button">Efectivo</button>
+          <button className={"subtab"+(metodo==="tarjeta"?" active":"")} onClick={()=>setMetodo("tarjeta")} type="button">Tarjeta</button>
+        </div>
+        <label>Cliente (opcional, para sumar sello e historial)</label>
+        <input type="text" value={buscar} onChange={e=>{setBuscar(e.target.value); setClienteId("");}} placeholder="Buscar cliente por nombre"/>
+        <select value={clienteId} onChange={e=>setClienteId(e.target.value)} style={{marginTop:8}}>
+          <option value="">Sin cliente</option>
+          {clientesFiltrados.map(c=> <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+        <div style={{marginTop:10, fontSize:15}}>
+          Total: <strong>${total.toFixed(0)}</strong>
+        </div>
+        <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
+          <button className="btn btn-primary" onClick={()=>onConfirm(n, metodo, clienteId||null)}>Confirmar venta</button>
+          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- FIDELIZACIÓN (tarjeta de sellos) ---------------- */
+function PizzaProgress({sellos, goal}){
+  const filled = sellos % goal === 0 && sellos>0 ? goal : sellos % goal;
+  const slices = Array.from({length:goal});
+  const cx=32, cy=32, r=28;
+  const anglePer = 360/goal;
+  const polar = (cx,cy,r,angDeg)=>{
+    const a = (angDeg-90)*Math.PI/180;
+    return [cx + r*Math.cos(a), cy + r*Math.sin(a)];
+  };
+  return (
+    <div className="pizza-wrap">
+      <svg className="pizza-svg" viewBox="0 0 64 64">
+        <circle cx={cx} cy={cy} r={r} fill="#F2C94C" opacity="0.15"/>
+        {slices.map((_,i)=>{
+          const start = i*anglePer, end = (i+1)*anglePer;
+          const [x1,y1] = polar(cx,cy,r,start);
+          const [x2,y2] = polar(cx,cy,r,end);
+          const large = anglePer>180 ? 1 : 0;
+          const path = `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z`;
+          const on = i < filled;
+          return <path key={i} className="slice" d={path} fill={on? "#C1440E":"none"} stroke="#2B211C" strokeWidth="1" opacity={on?1:0.25}/>;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function ClientesTab({role, showToast}){
+  const [clientes] = useCollection("clientes");
+  const [compras] = useCollection("compras");
+  const [config, setConfig] = useState({stampsGoal:STAMPS_GOAL});
+  const [showForm, setShowForm] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState(null);
+
+  useEffect(()=>{
+    if(!firebaseReady) return;
+    db.collection("config").doc("settings").get().then(doc=>{ if(doc.exists) setConfig(doc.data()); });
+  },[]);
+
+  const goal = config.stampsGoal || STAMPS_GOAL;
+
+  const filtered = useMemo(()=>{
+    const q = query.trim().toLowerCase();
+    const list = [...clientes].sort((a,b)=>a.nombre.localeCompare(b.nombre));
+    if(!q) return list;
+    return list.filter(c=> c.nombre.toLowerCase().includes(q) || (c.telefono||"").includes(q));
+  },[clientes, query]);
+
+  const addSello = async (cliente)=>{
+    try{
+      const nuevos = (cliente.sellos||0)+1;
+      await db.collection("clientes").doc(cliente.id).update({sellos:nuevos});
+      if(nuevos % goal === 0){
+        showToast(`🎉 ${cliente.nombre} llegó a ${goal} — ¡premio disponible!`);
+      }else{
+        showToast(`Sello agregado a ${cliente.nombre} (${nuevos % goal}/${goal})`);
+      }
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const canjear = async (cliente)=>{
+    try{
+      await db.collection("clientes").doc(cliente.id).update({
+        sellos: 0,
+        canjes: firebase.firestore.FieldValue.arrayUnion(new Date().toISOString())
+      });
+      showToast(`Premio canjeado — ${cliente.nombre}`);
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }finally{
+      setSelected(null);
+    }
+  };
+
+  const addCliente = async (form)=>{
+    if(!form.nombre || !form.nombre.trim()){
+      showToast("Escribe el nombre del cliente");
+      return;
+    }
+    try{
+      await db.collection("clientes").add({nombre:form.nombre.trim(), telefono:form.telefono.trim(), sellos:0, canjes:[]});
+      showToast("Cliente agregado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }finally{
+      setShowForm(false);
+    }
+  };
+
+  const deleteCliente = async (c)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection("clientes").doc(c.id).delete();
+      showToast("Cliente eliminado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
+    }finally{
+      setSelected(null);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="section-title">Clientes</h2>
+      <input type="text" placeholder="Buscar por nombre o teléfono" value={query} onChange={e=>setQuery(e.target.value)} style={{marginBottom:12}}/>
+      <div className="card">
+        {filtered.length===0 && (
+          <div className="empty"><span className="ic">🍕</span>Sin clientes todavía. Agrega el primero.</div>
+        )}
+        {filtered.map(c=>{
+          const current = (c.sellos||0) % goal;
+          const readyForFree = (c.sellos||0)>0 && current===0;
+          return (
+            <div className="client-card" key={c.id} onClick={()=>setSelected(c)}>
+              <PizzaProgress sellos={c.sellos||0} goal={goal}/>
+              <div style={{flex:1}}>
+                <div className="client-name">{c.nombre} {readyForFree && <span className="free-tag">Premio</span>}</div>
+                <div className="client-phone">{c.telefono} · {current}/{goal} sellos</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <button className="fab" onClick={()=>setShowForm(true)}>+</button>
+
+      {showForm && (
+        <div className="modal-overlay" onClick={()=>setShowForm(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-handle"/>
+            <ClienteForm onCancel={()=>setShowForm(false)} onSave={addCliente}/>
+          </div>
+        </div>
+      )}
+
+      {selected && (
+        <div className="modal-overlay" onClick={()=>setSelected(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div className="modal-handle"/>
+            <h3 className="display" style={{fontSize:22, marginTop:0}}>{selected.nombre}</h3>
+            <div style={{color:'rgba(43,33,28,0.6)', fontSize:13, marginBottom:14}}>{selected.telefono}</div>
+            <PizzaProgress sellos={selected.sellos||0} goal={goal}/>
+            <div style={{textAlign:'center', margin:'10px 0 18px', fontSize:14}}>
+              {(selected.sellos||0)%goal} de {goal} sellos
+              {(selected.sellos||0)>0 && (selected.sellos||0)%goal===0 && <div style={{color:'var(--gold)', fontWeight:700, marginTop:4}}>¡Premio disponible!</div>}
+            </div>
+            {(() => {
+              const inicioMes = startOfMonth(new Date());
+              const comprasCliente = compras.filter(c=>c.clienteId===selected.id && new Date(c.fecha)>=inicioMes);
+              const resumen = {};
+              comprasCliente.forEach(c=>{
+                if(!resumen[c.producto]) resumen[c.producto]=0;
+                resumen[c.producto]+=c.cantidad||0;
+              });
+              const items = Object.entries(resumen).sort((a,b)=>b[1]-a[1]);
+              return (
+                <div className="card" style={{textAlign:'left'}}>
+                  <div className="row" style={{marginBottom:8}}>
+                    <span style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', color:'var(--char-soft)'}}>Este mes</span>
+                    <span style={{fontWeight:800, fontSize:15}}>{comprasCliente.length} compra{comprasCliente.length!==1?"s":""}</span>
+                  </div>
+                  {items.length===0 && <div style={{fontSize:13, color:'rgba(43,33,28,0.5)'}}>Sin compras vinculadas todavía este mes.</div>}
+                  {items.map(([nombre, cant])=>(
+                    <div key={nombre} className="row" style={{fontSize:13, marginBottom:4}}>
+                      <span>{nombre}</span><span style={{fontWeight:700}}>×{cant}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            <div style={{display:'flex', flexDirection:'column', gap:10}}>
+              <button className="btn btn-primary" onClick={()=>addSello(selected)}>+ Agregar sello</button>
+              {(selected.sellos||0)>0 && (selected.sellos||0)%goal===0 &&
+                <button className="btn btn-secondary" onClick={()=>canjear(selected)}>Canjear premio</button>}
+              <button className="btn btn-outline" onClick={()=>setSelected(null)}>Cerrar</button>
+              {role==="admin" && <button className="btn btn-ghost" onClick={()=>deleteCliente(selected)}>Eliminar cliente</button>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClienteForm({onCancel, onSave}){
+  const [nombre,setNombre] = useState("");
+  const [telefono,setTelefono] = useState("");
+  return (
+    <div>
+      <h3 className="display" style={{fontSize:20, marginTop:0}}>Nuevo cliente</h3>
+      <label>Nombre</label>
+      <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Nombre del cliente"/>
+      <label>Teléfono</label>
+      <input type="tel" value={telefono} onChange={e=>setTelefono(e.target.value)} placeholder="998 000 0000"/>
+      <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
+        <button className="btn btn-primary" onClick={()=>onSave({nombre,telefono})}>Guardar</button>
+        <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- VENTAS (dinero y top pizzas) ---------------- */
+function startOfWeek(d){
+  const date = new Date(d);
+  const day = date.getDay(); // 0=domingo
+  const diff = (day===0 ? -6 : 1-day); // lunes como inicio
+  date.setHours(0,0,0,0);
+  date.setDate(date.getDate()+diff);
+  return date;
+}
+function startOfMonth(d){
+  const date = new Date(d);
+  date.setHours(0,0,0,0);
+  date.setDate(1);
+  return date;
+}
+
+function VentasTab(){
+  const [ventas, loading] = useCollection("ventas");
+  const [periodo, setPeriodo] = useState("semana");
+
+  const now = new Date();
+  const inicioSemana = startOfWeek(now);
+  const inicioMes = startOfMonth(now);
+
+  const totalEnRango = (desde)=> ventas
+    .filter(v=> new Date(v.fecha) >= desde)
+    .reduce((sum,v)=> sum + (v.total||0), 0);
+
+  const totalSemana = totalEnRango(inicioSemana);
+  const totalMes = totalEnRango(inicioMes);
+
+  const inicioHoy = new Date(); inicioHoy.setHours(0,0,0,0);
+  const desdeFiltro = periodo==="hoy" ? inicioHoy : periodo==="semana" ? inicioSemana : periodo==="mes" ? inicioMes : new Date(0);
+
+  const topPizzas = useMemo(()=>{
+    const filtradas = ventas.filter(v=> new Date(v.fecha) >= desdeFiltro);
+    const map = {};
+    filtradas.forEach(v=>{
+      if(!map[v.producto]) map[v.producto] = {unidades:0, total:0};
+      map[v.producto].unidades += v.cantidad||0;
+      map[v.producto].total += v.total||0;
+    });
+    return Object.entries(map)
+      .map(([nombre, d])=>({nombre, ...d}))
+      .sort((a,b)=>b.unidades-a.unidades)
+      .slice(0,8);
+  },[ventas, periodo]);
+
+  const maxUnidades = topPizzas.length ? topPizzas[0].unidades : 0;
+
+  const porDia = useMemo(()=>{
+    const dias = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+    const totales = [0,0,0,0,0,0,0];
+    ventas.filter(v=> new Date(v.fecha) >= desdeFiltro).forEach(v=>{
+      totales[new Date(v.fecha).getDay()] += v.total||0;
+    });
+    // reordenar para que inicie en lunes
+    const orden = [1,2,3,4,5,6,0];
+    return orden.map(i=>({label:dias[i], total:totales[i]}));
+  },[ventas, periodo]);
+  const maxDia = Math.max(1, ...porDia.map(d=>d.total));
+
+  const porHora = useMemo(()=>{
+    const totales = Array.from({length:24},()=>0);
+    ventas.filter(v=> new Date(v.fecha) >= desdeFiltro).forEach(v=>{
+      totales[new Date(v.fecha).getHours()] += v.cantidad||0;
+    });
+    return totales;
+  },[ventas, periodo]);
+  const maxHora = Math.max(1, ...porHora);
+  const horaPico = porHora.indexOf(Math.max(...porHora));
+
+  return (
+    <div>
+      <h2 className="section-title">Ventas</h2>
+
+      <div style={{display:'flex', gap:10, marginBottom:12}}>
+        <div className="card" style={{flex:1, textAlign:'center', margin:0}}>
+          <div style={{fontSize:11, textTransform:'uppercase', letterSpacing:'0.04em', color:'rgba(43,33,28,0.55)', fontWeight:700}}>Esta semana</div>
+          <div className="display" style={{fontSize:26, marginTop:4}}>${totalSemana.toFixed(0)}</div>
+        </div>
+        <div className="card" style={{flex:1, textAlign:'center', margin:0}}>
+          <div style={{fontSize:11, textTransform:'uppercase', letterSpacing:'0.04em', color:'rgba(43,33,28,0.55)', fontWeight:700}}>Este mes</div>
+          <div className="display" style={{fontSize:26, marginTop:4}}>${totalMes.toFixed(0)}</div>
+        </div>
+      </div>
+
+      <div className="subtabs">
+        <button className={"subtab"+(periodo==="hoy"?" active":"")} onClick={()=>setPeriodo("hoy")}>Hoy</button>
+        <button className={"subtab"+(periodo==="semana"?" active":"")} onClick={()=>setPeriodo("semana")}>Semana</button>
+        <button className={"subtab"+(periodo==="mes"?" active":"")} onClick={()=>setPeriodo("mes")}>Mes</button>
+        <button className={"subtab"+(periodo==="todo"?" active":"")} onClick={()=>setPeriodo("todo")}>Todo</button>
+      </div>
+
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Ventas por día
+        </div>
+        <div style={{display:'flex', alignItems:'flex-end', gap:6, height:90}}>
+          {porDia.map(d=>(
+            <div key={d.label} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', height:'100%'}}>
+              <div style={{width:'70%', background:'var(--tomato)', borderRadius:'4px 4px 0 0', height:`${(d.total/maxDia*100)}%`, minHeight: d.total>0?4:0}}/>
+              <div style={{fontSize:10, marginTop:4, color:'rgba(43,33,28,0.6)', fontWeight:700}}>{d.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="row" style={{marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', color:'var(--char-soft)'}}>
+            Hora pico
+          </div>
+          {porHora.some(h=>h>0) && <div style={{fontSize:12, color:'var(--tomato)', fontWeight:700}}>{horaPico}:00 – {horaPico+1}:00</div>}
+        </div>
+        <div style={{display:'flex', alignItems:'flex-end', gap:2, height:70}}>
+          {porHora.map((h,i)=>(
+            <div key={i} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', height:'100%'}} title={`${i}:00`}>
+              <div style={{width:'100%', background: i===horaPico && h>0 ? 'var(--tomato)':'var(--gold)', opacity: i===horaPico && h>0 ? 1:0.5, borderRadius:'2px 2px 0 0', height:`${(h/maxHora*100)}%`, minHeight: h>0?3:0}}/>
+            </div>
+          ))}
+        </div>
+        <div style={{display:'flex', justifyContent:'space-between', fontSize:9, color:'rgba(43,33,28,0.45)', marginTop:4}}>
+          <span>0h</span><span>12h</span><span>23h</span>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Productos más vendidos
+        </div>
+        {!loading && topPizzas.length===0 && (
+          <div className="empty"><span className="ic">📊</span>Todavía no hay ventas registradas en este periodo.</div>
+        )}
+        {topPizzas.map((p,i)=>(
+          <div key={p.nombre} style={{marginBottom:12}}>
+            <div className="row" style={{marginBottom:4}}>
+              <span style={{fontWeight:600, fontSize:14}}>{i+1}. {p.nombre}</span>
+              <span style={{fontSize:13, color:'rgba(43,33,28,0.6)'}}>{p.unidades} vendidas · ${p.total.toFixed(0)}</span>
+            </div>
+            <div style={{background:'var(--line)', borderRadius:6, height:8, overflow:'hidden'}}>
+              <div style={{width:`${maxUnidades? (p.unidades/maxUnidades*100):0}%`, background:'var(--tomato)', height:'100%'}}/>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{fontSize:12, color:'rgba(43,33,28,0.5)', textAlign:'center', marginTop:4}}>
+        Las ventas se registran desde el botón "Vender" en cada producto dentro de Inventario.
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- MÁS: CAJA, GASTOS, COSTOS, INCIDENCIAS ---------------- */
+function isToday(fechaISO){
+  const d = new Date(fechaISO), n = new Date();
+  return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
+}
+function fmtFechaHora(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}) + " " + d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+}
+
+function CajaSub({role, showToast}){
+  const [ventas] = useCollection("ventas");
+  const [cortes] = useCollection("cortes");
+
+  const ventasHoy = ventas.filter(v=>isToday(v.fecha));
+  const totalEfectivo = ventasHoy.filter(v=>v.metodoPago!=="tarjeta").reduce((s,v)=>s+(v.total||0),0);
+  const totalTarjeta = ventasHoy.filter(v=>v.metodoPago==="tarjeta").reduce((s,v)=>s+(v.total||0),0);
+  const totalHoy = totalEfectivo+totalTarjeta;
+
+  const corteHoy = [...cortes].reverse().find(c=>isToday(c.fecha));
+  const historial = [...cortes].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0,10);
+
+  const ingresosPorDia = useMemo(()=>{
+    const map = {};
+    ventas.forEach(v=>{
+      const d = new Date(v.fecha);
+      const key = d.toISOString().slice(0,10);
+      if(!map[key]) map[key] = {fecha:key, total:0, efectivo:0, tarjeta:0};
+      map[key].total += v.total||0;
+      if(v.metodoPago==="tarjeta") map[key].tarjeta += v.total||0; else map[key].efectivo += v.total||0;
+    });
+    return Object.values(map).sort((a,b)=> b.fecha.localeCompare(a.fecha)).slice(0,14);
+  },[ventas]);
+  const maxIngreso = Math.max(1, ...ingresosPorDia.map(d=>d.total));
+
+  const cerrarCaja = async ()=>{
+    try{
+      await db.collection("cortes").add({
+        fecha: new Date().toISOString(),
+        totalEfectivo, totalTarjeta, total: totalHoy,
+        cerradoPor: role
+      });
+      showToast("Caja cerrada");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }
+  };
+
+  return (
+    <div>
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Corte de hoy
+        </div>
+        <div className="row" style={{marginBottom:6}}><span>Efectivo</span><strong>${totalEfectivo.toFixed(0)}</strong></div>
+        <div className="row" style={{marginBottom:6}}><span>Tarjeta</span><strong>${totalTarjeta.toFixed(0)}</strong></div>
+        <div className="row" style={{borderTop:'1px solid var(--line)', paddingTop:8, marginTop:4}}><span style={{fontWeight:700}}>Total</span><strong style={{fontSize:18}}>${totalHoy.toFixed(0)}</strong></div>
+        {corteHoy && (
+          <div style={{fontSize:12, color:'var(--danger)', marginTop:10}}>
+            Ya cerraste la caja hoy a las {new Date(corteHoy.fecha).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}.
+          </div>
+        )}
+        <div style={{marginTop:14}}>
+          <button className="btn btn-primary" onClick={cerrarCaja}>{corteHoy? "Cerrar caja de nuevo":"Cerrar caja de hoy"}</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Dinero que entró por día
+        </div>
+        {ingresosPorDia.length===0 && <div className="empty"><span className="ic">💵</span>Sin ventas registradas todavía.</div>}
+        {ingresosPorDia.map(d=>{
+          const fechaObj = new Date(d.fecha+"T00:00:00");
+          const esHoy = isToday(fechaObj.toISOString());
+          return (
+            <div key={d.fecha} style={{marginBottom:10}}>
+              <div className="row" style={{marginBottom:4}}>
+                <span style={{fontSize:13, fontWeight:esHoy?800:600}}>
+                  {fechaObj.toLocaleDateString('es-MX',{weekday:'short', day:'2-digit', month:'short'})}{esHoy?" · hoy":""}
+                </span>
+                <span style={{fontSize:14, fontWeight:700}}>${d.total.toFixed(0)}</span>
+              </div>
+              <div style={{background:'var(--line)', borderRadius:6, height:8, overflow:'hidden'}}>
+                <div style={{width:`${(d.total/maxIngreso*100)}%`, background: esHoy?'var(--tomato)':'var(--gold)', height:'100%'}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Historial de cortes
+        </div>
+        {historial.length===0 && <div className="empty"><span className="ic">🧾</span>Sin cortes registrados todavía.</div>}
+        {historial.map(c=>(
+          <div className="item-row" key={c.id}>
+            <div>
+              <div className="item-name">{fmtFechaHora(c.fecha)}</div>
+              <div className="item-meta">Efectivo ${c.totalEfectivo?.toFixed(0)} · Tarjeta ${c.totalTarjeta?.toFixed(0)} · {c.cerradoPor}</div>
+            </div>
+            <div className="qty" style={{fontSize:16}}>${c.total?.toFixed(0)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GastosSub({role, showToast}){
+  const [gastos] = useCollection("gastos");
+  const [showForm, setShowForm] = useState(false);
+  const inicioMes = startOfMonth(new Date());
+  const totalMes = gastos.filter(g=> new Date(g.fecha)>=inicioMes).reduce((s,g)=>s+(g.monto||0),0);
+  const ordenados = [...gastos].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
+
+  const addGasto = async (form)=>{
+    if(!form.concepto || !form.concepto.trim()){
+      showToast("Escribe el concepto del gasto");
+      return;
+    }
+    if(!form.monto || form.monto<=0){
+      showToast("Escribe un monto válido");
+      return;
+    }
+    try{
+      await db.collection("gastos").add(form);
+      showToast("Gasto registrado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }finally{
+      setShowForm(false);
+    }
+  };
+  const deleteGasto = async (g)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection("gastos").doc(g.id).delete();
+      showToast("Gasto eliminado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
+    }
+  };
+
+  return (
+    <div>
+      <div className="card" style={{textAlign:'center'}}>
+        <div style={{fontSize:11, textTransform:'uppercase', letterSpacing:'0.04em', color:'rgba(43,33,28,0.55)', fontWeight:700}}>Gastos este mes</div>
+        <div className="display" style={{fontSize:26, marginTop:4}}>${totalMes.toFixed(0)}</div>
+      </div>
+      <div className="card">
+        {ordenados.length===0 && <div className="empty"><span className="ic">🧾</span>Sin gastos registrados.</div>}
+        {ordenados.map(g=>(
+          <div className="item-row" key={g.id}>
+            <div style={{flex:1}}>
+              <div className="item-name">{g.concepto}</div>
+              <div className="item-meta">{g.categoria} · {new Date(g.fecha).toLocaleDateString('es-MX',{day:'2-digit',month:'short'})}</div>
+            </div>
+            <div className="qty" style={{fontSize:16}}>${g.monto?.toFixed(0)}</div>
+            {role==="admin" && <button className="btn-ghost" style={{width:'auto', padding:'0 0 0 10px'}} onClick={()=>deleteGasto(g)}>✕</button>}
+          </div>
+        ))}
+      </div>
+      <button className="fab" onClick={()=>setShowForm(true)}>+</button>
+      {showForm && <GastoForm onCancel={()=>setShowForm(false)} onSave={addGasto}/>}
+    </div>
+  );
+}
+
+function GastoForm({onCancel, onSave}){
+  const [concepto,setConcepto] = useState("");
+  const [monto,setMonto] = useState("");
+  const [categoria,setCategoria] = useState("Renta");
+  const [fecha,setFecha] = useState(new Date().toISOString().slice(0,10));
+  const submit = ()=>{
+    onSave({concepto:concepto.trim(), monto:Number(monto)||0, categoria, fecha:new Date(fecha).toISOString()});
+  };
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <h3 className="display" style={{fontSize:20, marginTop:0}}>Nuevo gasto</h3>
+        <label>Concepto</label>
+        <input type="text" value={concepto} onChange={e=>setConcepto(e.target.value)} placeholder="Ej. Renta local"/>
+        <label>Monto (MXN)</label>
+        <input type="number" value={monto} onChange={e=>setMonto(e.target.value)} placeholder="0"/>
+        <label>Categoría</label>
+        <select value={categoria} onChange={e=>setCategoria(e.target.value)}>
+          <option>Renta</option>
+          <option>Luz</option>
+          <option>Sueldos</option>
+          <option>Insumos</option>
+          <option>Otros</option>
+        </select>
+        <label>Fecha</label>
+        <input type="text" inputMode="numeric" value={fecha} onChange={e=>setFecha(e.target.value)} placeholder="AAAA-MM-DD"/>
+        <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
+          <button className="btn btn-primary" onClick={submit}>Guardar</button>
+          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CostosSub(){
+  const [productos] = useCollection("productos");
+  const [costoCalc, setCostoCalc] = useState("");
+  const [precioCalc, setPrecioCalc] = useState("");
+  const margenCalc = (precioCalc && costoCalc) ? Number(precioCalc)-Number(costoCalc) : null;
+  const pctCalc = (margenCalc!=null && Number(precioCalc)>0) ? (margenCalc/Number(precioCalc)*100) : null;
+
+  const conMargen = productos.map(p=>{
+    const costo = p.costo||0, precio = p.precio||0;
+    const margen = precio-costo;
+    const pct = precio>0 ? (margen/precio*100) : null;
+    return {...p, margen, pct};
+  }).sort((a,b)=> (a.pct ?? 999) - (b.pct ?? 999));
+
+  const colorFor = (pct)=> pct==null ? 'rgba(43,33,28,0.4)' : pct<20 ? 'var(--danger)' : pct<40 ? 'var(--gold)' : 'var(--basil)';
+
+  return (
+    <div>
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Calculadora rápida
+        </div>
+        <div style={{display:'flex', gap:10}}>
+          <div style={{flex:1}}>
+            <label>Costo</label>
+            <input type="number" value={costoCalc} onChange={e=>setCostoCalc(e.target.value)} placeholder="0"/>
+          </div>
+          <div style={{flex:1}}>
+            <label>Precio venta</label>
+            <input type="number" value={precioCalc} onChange={e=>setPrecioCalc(e.target.value)} placeholder="0"/>
+          </div>
+        </div>
+        {margenCalc!=null && (
+          <div style={{marginTop:12, fontSize:15}}>
+            Margen: <strong>${margenCalc.toFixed(0)}</strong> · <strong style={{color:colorFor(pctCalc)}}>{pctCalc.toFixed(0)}%</strong>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Margen por producto
+        </div>
+        {conMargen.length===0 && <div className="empty"><span className="ic">📊</span>Agrega productos con precio y costo en Inventario.</div>}
+        {conMargen.map(p=>(
+          <div className="item-row" key={p.id}>
+            <div style={{flex:1}}>
+              <div className="item-name">{p.nombre}</div>
+              <div className="item-meta">Precio ${p.precio||0} · Costo ${p.costo||0}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontWeight:700, color:colorFor(p.pct)}}>{p.pct!=null? p.pct.toFixed(0)+"%" : "—"}</div>
+              <div style={{fontSize:11, color:'rgba(43,33,28,0.5)'}}>${p.margen.toFixed(0)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IncidenciasSub({role, showToast}){
+  const [incidencias] = useCollection("incidencias");
+  const [texto, setTexto] = useState("");
+  const ordenadas = [...incidencias].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
+
+  const addNota = async ()=>{
+    if(!texto.trim()) return;
+    try{
+      await db.collection("incidencias").add({texto:texto.trim(), fecha:new Date().toISOString(), autor: role});
+      setTexto("");
+      showToast("Nota guardada");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }
+  };
+  const deleteNota = async (n)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection("incidencias").doc(n.id).delete();
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
+    }
+  };
+
+  return (
+    <div>
+      <div className="card">
+        <label>Nueva nota o incidencia del turno</label>
+        <textarea value={texto} onChange={e=>setTexto(e.target.value)} rows="3"
+          style={{width:'100%', padding:12, borderRadius:10, border:'1.5px solid var(--line)', fontSize:15, fontFamily:'Inter', background:'var(--mozz)', color:'var(--char)'}}
+          placeholder="Ej. Se descompuso el horno chico, llamar a mantenimiento"/>
+        <div style={{marginTop:10}}>
+          <button className="btn btn-primary" onClick={addNota}>Guardar nota</button>
+        </div>
+      </div>
+      <div className="card">
+        {ordenadas.length===0 && <div className="empty"><span className="ic">📋</span>Sin notas registradas.</div>}
+        {ordenadas.map(n=>(
+          <div key={n.id} style={{padding:'10px 0', borderBottom:'1px solid var(--line)'}}>
+            <div style={{fontSize:14}}>{n.texto}</div>
+            <div className="row" style={{marginTop:4}}>
+              <span style={{fontSize:11, color:'rgba(43,33,28,0.5)'}}>{fmtFechaHora(n.fecha)} · {n.autor}</span>
+              {role==="admin" && <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:11}} onClick={()=>deleteNota(n)}>Eliminar</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MasTab({role, showToast}){
+  const [sub, setSub] = useState("caja");
+  return (
+    <div>
+      <h2 className="section-title">Más herramientas</h2>
+      <div className="subtabs">
+        <button className={"subtab"+(sub==="caja"?" active":"")} onClick={()=>setSub("caja")}>Caja</button>
+        <button className={"subtab"+(sub==="gastos"?" active":"")} onClick={()=>setSub("gastos")}>Gastos</button>
+        <button className={"subtab"+(sub==="costos"?" active":"")} onClick={()=>setSub("costos")}>Costos</button>
+        <button className={"subtab"+(sub==="notas"?" active":"")} onClick={()=>setSub("notas")}>Notas</button>
+      </div>
+      {sub==="caja" && <CajaSub role={role} showToast={showToast}/>}
+      {sub==="gastos" && <GastosSub role={role} showToast={showToast}/>}
+      {sub==="costos" && <CostosSub/>}
+      {sub==="notas" && <IncidenciasSub role={role} showToast={showToast}/>}
+    </div>
+  );
+}
+
+/* ---------------- AJUSTES ---------------- */
+function AjustesTab({role, showToast}){
+  const [config, setConfig] = useState(null);
+  const [savedTick, setSavedTick] = useState(0);
+  const loadedRef = useRef(false);
+  const saveTimer = useRef(null);
+
+  useEffect(()=>{
+    const DEFAULT_CONFIG = {adminPin:"0000", staffPin:"1111", stampsGoal:STAMPS_GOAL};
+    if(!firebaseReady){ setConfig(DEFAULT_CONFIG); loadedRef.current = true; return; }
+    db.collection("config").doc("settings").get().then(doc=>{
+      if(doc.exists) setConfig(doc.data());
+      else setConfig(DEFAULT_CONFIG);
+      loadedRef.current = true;
+    }).catch(()=> { setConfig(DEFAULT_CONFIG); loadedRef.current = true; });
+  },[]);
+
+  // Autoguardado: cada vez que config cambia (después de cargar), se guarda solo tras una breve pausa
+  useEffect(()=>{
+    if(!config || !loadedRef.current || !firebaseReady) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async ()=>{
+      try{
+        await db.collection("config").doc("settings").set(config);
+        setSavedTick(t=>t+1);
+      }catch(e){
+        console.error(e);
+      }
+    }, 500);
+    return ()=> clearTimeout(saveTimer.current);
+  },[config]);
+
+  if(role!=="admin") return (
+    <div><h2 className="section-title">Ajustes</h2>
+      <div className="card"><div className="empty"><span className="ic">🔒</span>Solo el administrador puede ver esta sección.</div></div>
+    </div>
+  );
+  if(!config) return <div>Cargando...</div>;
+
+  return (
+    <div>
+      <h2 className="section-title">Ajustes</h2>
+      {!firebaseReady && (
+        <div className="card" style={{borderColor:'var(--danger)', background:'rgba(179,38,30,0.06)', fontSize:12, color:'var(--danger)'}}>
+          Firebase no está conectado — estos cambios no se guardarán todavía.
+        </div>
+      )}
+      <div className="card">
+        <label>PIN de administrador</label>
+        <input type="text" inputMode="numeric" maxLength="4" value={config.adminPin} onChange={e=>setConfig({...config, adminPin:e.target.value})}/>
+        <label>PIN de personal</label>
+        <input type="text" inputMode="numeric" maxLength="4" value={config.staffPin} onChange={e=>setConfig({...config, staffPin:e.target.value})}/>
+        <label>Sellos para premio gratis</label>
+        <input type="number" value={config.stampsGoal} onChange={e=>setConfig({...config, stampsGoal:Number(e.target.value)})}/>
+        <div style={{marginTop:14, fontSize:12, color:'var(--basil)', fontWeight:600}}>
+          <span className="savingdot"></span>Guardado automático{savedTick>0 ? " ✓" : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- APP ---------------- */
+function App(){
+  const [role, setRole] = useState(()=>sessionStorage.getItem("barbozza_role"));
+  const [tab, setTab] = useState("inventario");
+  const [toast, setToast] = useState("");
+
+  const showToast = (msg)=>{
+    setToast(msg);
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>setToast(""), 2200);
+  };
+
+  const login = (r)=>{
+    setRole(r);
+    sessionStorage.setItem("barbozza_role", r);
+  };
+  const logout = ()=>{
+    setRole(null);
+    sessionStorage.removeItem("barbozza_role");
+  };
+
+  if(!role) return <PinScreen onLogin={login}/>;
+
+  return (
+    <div>
+      <Toast msg={toast}/>
+      <div className="topbar">
+        <div className="brand"><img src={LOGO_DATA_URI} alt="Barbozza's" style={{height:38, width:'auto', display:'block'}}/></div>
+        <div className="sub">Control de inventario, clientes y ventas</div>
+        <div className="role-badge" onClick={logout}>{role==="admin"?"Admin":"Personal"} · salir</div>
+      </div>
+      <main>
+        {tab==="inventario" && <InventarioTab role={role} showToast={showToast}/>}
+        {tab==="ventas" && <VentasTab/>}
+        {tab==="clientes" && <ClientesTab role={role} showToast={showToast}/>}
+        {tab==="mas" && <MasTab role={role} showToast={showToast}/>}
+        {tab==="ajustes" && <AjustesTab role={role} showToast={showToast}/>}
+      </main>
+      <div className="navbar">
+        <button className={"navbtn"+(tab==="inventario"?" active":"")} onClick={()=>setTab("inventario")}>
+          <span className="ic">📦</span>Inventario
+        </button>
+        <button className={"navbtn"+(tab==="ventas"?" active":"")} onClick={()=>setTab("ventas")}>
+          <span className="ic">💰</span>Ventas
+        </button>
+        <button className={"navbtn"+(tab==="clientes"?" active":"")} onClick={()=>setTab("clientes")}>
+          <span className="ic">🍕</span>Clientes
+        </button>
+        <button className={"navbtn"+(tab==="mas"?" active":"")} onClick={()=>setTab("mas")}>
+          <span className="ic">🔧</span>Más
+        </button>
+        <button className={"navbtn"+(tab==="ajustes"?" active":"")} onClick={()=>setTab("ajustes")}>
+          <span className="ic">⚙️</span>Ajustes
+        </button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
