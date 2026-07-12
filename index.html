@@ -880,7 +880,7 @@ function startOfMonth(d){
   return date;
 }
 
-function VentasTab(){
+function VentasTab({role, showToast}){
   const [ventas, loading] = useCollection("ventas");
   const [periodo, setPeriodo] = useState("semana");
 
@@ -913,6 +913,21 @@ function VentasTab(){
   },[ventas, periodo]);
 
   const maxUnidades = topPizzas.length ? topPizzas[0].unidades : 0;
+
+  const historialReciente = useMemo(()=>
+    [...ventas].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0,20)
+  ,[ventas]);
+
+  const deleteVenta = async (venta)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection("ventas").doc(venta.id).delete();
+      showToast("Venta eliminada");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
+    }
+  };
 
   const porDia = useMemo(()=>{
     const dias = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
@@ -1010,8 +1025,28 @@ function VentasTab(){
           </div>
         ))}
       </div>
+      <div className="card">
+        <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+          Historial reciente {role==="admin" && "(toca ✕ para borrar)"}
+        </div>
+        {historialReciente.length===0 && (
+          <div className="empty"><span className="ic">🧾</span>Sin ventas registradas todavía.</div>
+        )}
+        {historialReciente.map(v=>(
+          <div className="item-row" key={v.id}>
+            <div style={{flex:1}}>
+              <div className="item-name">{v.cantidad}× {v.producto}</div>
+              <div className="item-meta">{fmtFechaHora(v.fecha)} · {v.metodoPago==="tarjeta"?"Tarjeta":"Efectivo"}</div>
+            </div>
+            <div className="qty" style={{fontSize:16}}>${(v.total||0).toFixed(0)}</div>
+            {role==="admin" && (
+              <button className="btn-ghost" style={{width:'auto', padding:'0 0 0 10px'}} onClick={()=>deleteVenta(v)}>✕</button>
+            )}
+          </div>
+        ))}
+      </div>
       <div style={{fontSize:12, color:'rgba(43,33,28,0.5)', textAlign:'center', marginTop:4}}>
-        Las ventas se registran desde el botón "Vender" en cada producto dentro de Inventario.
+        Las ventas se registran desde el botón "Vender" en cada producto dentro de Inventario. Borrar una venta no repone el inventario automáticamente — ajústalo con el +/- si hace falta.
       </div>
     </div>
   );
@@ -1063,6 +1098,17 @@ function CajaSub({role, showToast}){
     }catch(e){
       console.error(e);
       showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const deleteCorte = async (c)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection("cortes").doc(c.id).delete();
+      showToast("Corte eliminado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
     }
   };
 
@@ -1121,6 +1167,9 @@ function CajaSub({role, showToast}){
               <div className="item-meta">Efectivo ${c.totalEfectivo?.toFixed(0)} · Tarjeta ${c.totalTarjeta?.toFixed(0)} · {c.cerradoPor}</div>
             </div>
             <div className="qty" style={{fontSize:16}}>${c.total?.toFixed(0)}</div>
+            {role==="admin" && (
+              <button className="btn-ghost" style={{width:'auto', padding:'0 0 0 10px'}} onClick={()=>deleteCorte(c)}>✕</button>
+            )}
           </div>
         ))}
       </div>
@@ -1454,7 +1503,7 @@ function App(){
       </div>
       <main>
         {tab==="inventario" && <InventarioTab role={role} showToast={showToast}/>}
-        {tab==="ventas" && <VentasTab/>}
+        {tab==="ventas" && <VentasTab role={role} showToast={showToast}/>}
         {tab==="clientes" && <ClientesTab role={role} showToast={showToast}/>}
         {tab==="mas" && <MasTab role={role} showToast={showToast}/>}
         {tab==="ajustes" && <AjustesTab role={role} showToast={showToast}/>}
