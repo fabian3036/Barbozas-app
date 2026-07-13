@@ -329,9 +329,14 @@ function InventarioTab({role, showToast}){
     {nombre:"Horchata (1L)", precio:30, categoria:"Aguas Frescas"},
   ];
 
+  const cargandoMenu = useRef(false);
+
   const cargarMenu = async ()=>{
+    if(cargandoMenu.current) return;
+    cargandoMenu.current = true;
     try{
-      const existentes = new Set(productos.map(p=>p.nombre.toLowerCase()));
+      const snap = await db.collection("productos").get();
+      const existentes = new Set(snap.docs.map(d=>(d.data().nombre||"").toLowerCase()));
       const nuevos = MENU_BARBOZZAS.filter(m=>!existentes.has(m.nombre.toLowerCase()));
       if(nuevos.length===0){ showToast("Tu menú ya está cargado"); return; }
       await Promise.all(nuevos.map(m=> db.collection("productos").add({
@@ -341,6 +346,33 @@ function InventarioTab({role, showToast}){
     }catch(e){
       console.error(e);
       showToast("No se pudo guardar — revisa tu conexión a Firebase");
+    }finally{
+      cargandoMenu.current = false;
+    }
+  };
+
+  const quitarDuplicados = async ()=>{
+    try{
+      const grupos = {};
+      productos.forEach(p=>{
+        const key = (p.nombre||"").trim().toLowerCase();
+        if(!grupos[key]) grupos[key] = [];
+        grupos[key].push(p);
+      });
+      const aBorrar = [];
+      Object.values(grupos).forEach(list=>{
+        if(list.length>1){
+          // Conserva el que tenga más cantidad registrada (o el primero), borra el resto
+          const ordenados = [...list].sort((a,b)=>(b.cantidad||0)-(a.cantidad||0));
+          aBorrar.push(...ordenados.slice(1));
+        }
+      });
+      if(aBorrar.length===0){ showToast("No hay duplicados"); return; }
+      await Promise.all(aBorrar.map(p=>db.collection("productos").doc(p.id).delete()));
+      showToast(`${aBorrar.length} duplicados eliminados`);
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo limpiar — revisa tu conexión a Firebase");
     }
   };
 
@@ -453,8 +485,9 @@ function InventarioTab({role, showToast}){
         <button className={"subtab"+(sub==="productos"?" active":"")} onClick={()=>setSub("productos")}>Productos</button>
       </div>
       {sub==="productos" && productos.length>0 && (
-        <div style={{textAlign:'right', marginBottom:8}}>
-          <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:12}} onClick={cargarMenu}>+ Completar con menú de Barbozza's</button>
+        <div style={{textAlign:'right', marginBottom:8, display:'flex', flexDirection:'column', gap:4}}>
+          <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:12, alignSelf:'flex-end'}} onClick={cargarMenu}>+ Completar con menú de Barbozza's</button>
+          <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:12, alignSelf:'flex-end'}} onClick={quitarDuplicados}>🧹 Quitar duplicados</button>
         </div>
       )}
       <div className="card">
