@@ -442,19 +442,25 @@ function InventarioTab({role, showToast}){
       });
       if(clienteId){
         const cliente = clientes.find(c=>c.id===clienteId);
+        const esPizza = item.nombre.toLowerCase().includes("pizza");
         if(cliente){
-          await db.collection("clientes").doc(clienteId).update({sellos: (cliente.sellos||0)+1});
+          if(esPizza){
+            await db.collection("clientes").doc(clienteId).update({sellos: (cliente.sellos||0)+1});
+          }
           await db.collection("compras").add({
             clienteId,
             clienteNombre: cliente.nombre,
             producto: item.nombre,
             cantidad: qty,
             total,
+            cuentaSello: esPizza,
             fecha: new Date().toISOString(),
           });
         }
+        showToast(`Venta registrada — $${total.toFixed(0)}${clienteId ? (esPizza? " · +1 sello" : " · sin sello (no es pizza)") : ""}`);
+      }else{
+        showToast(`Venta registrada: ${qty} × ${item.nombre} — $${total.toFixed(0)}`);
       }
-      showToast(`Venta registrada: ${qty} × ${item.nombre} — $${total.toFixed(0)}`);
     }catch(e){
       console.error(e);
       showToast("No se pudo registrar la venta — revisa tu conexión a Firebase");
