@@ -296,22 +296,31 @@ function InventarioTab({role, showToast}){
   const [sub, setSub] = useState("insumos");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [selling, setSelling] = useState(null);
   const [carrito, setCarrito] = useState([]);
   const [showFinalizar, setShowFinalizar] = useState(false);
 
-  const agregarACarrito = (item, qty)=>{
+  const agregarACarrito = (item)=>{
     setCarrito(prev=>{
       const idx = prev.findIndex(c=>c.id===item.id);
       if(idx>=0){
         const copia = [...prev];
-        copia[idx] = {...copia[idx], cantidad: copia[idx].cantidad + qty};
+        copia[idx] = {...copia[idx], cantidad: copia[idx].cantidad + 1};
         return copia;
       }
-      return [...prev, {id:item.id, nombre:item.nombre, precio:item.precio||0, cantidad: qty}];
+      return [...prev, {id:item.id, nombre:item.nombre, precio:item.precio||0, cantidad: 1}];
     });
-    setSelling(null);
   };
+
+  const quitarUnoDeCarrito = (id)=> setCarrito(prev=>{
+    const idx = prev.findIndex(c=>c.id===id);
+    if(idx<0) return prev;
+    if(prev[idx].cantidad<=1) return prev.filter(c=>c.id!==id);
+    const copia = [...prev];
+    copia[idx] = {...copia[idx], cantidad: copia[idx].cantidad - 1};
+    return copia;
+  });
+
+  const cantidadEnCarrito = (id)=> carrito.find(c=>c.id===id)?.cantidad || 0;
 
   const quitarDeCarrito = (id)=> setCarrito(prev=>prev.filter(c=>c.id!==id));
   const cambiarCantidadCarrito = (id, delta)=> setCarrito(prev=>prev.map(c=>
@@ -581,18 +590,21 @@ function InventarioTab({role, showToast}){
                 </div>
                 {group.items.map(item=>{
                   const isLow = item.minimo!=null && item.cantidad<=item.minimo;
+                  const enCarrito = cantidadEnCarrito(item.id);
                   return (
                     <div className="item-row" key={item.id}>
                       <div onClick={()=>{setEditing(item); setShowForm(true);}} style={{flex:1}}>
                         <div className="item-name">{item.nombre}{isLow && <span className="badge-low">Bajo</span>}</div>
-                        <div className="item-meta">${item.precio||0}{item.minimo!=null ? ` · mín. ${item.minimo}` : ""}</div>
+                        <div className="item-meta">${item.precio||0} · stock: {item.cantidad}{item.minimo!=null ? ` · mín. ${item.minimo}` : ""}</div>
                       </div>
-                      <button className="stepbtn" style={{width:'auto', borderRadius:20, padding:'0 12px', fontSize:13, fontWeight:700, background:'var(--tomato)', borderColor:'var(--tomato)', color:'var(--mozz)', marginRight:6}}
-                        onClick={()=>setSelling(item)}>Agregar</button>
                       <div className="stepper">
-                        <button className="stepbtn minus" onClick={()=>adjustQty(item,-1)}>–</button>
-                        <div className={"qty"+(isLow?" low":"")}>{item.cantidad}</div>
-                        <button className="stepbtn plus" onClick={()=>adjustQty(item,1)}>+</button>
+                        {enCarrito>0 && (
+                          <>
+                            <button className="stepbtn minus" onClick={()=>quitarUnoDeCarrito(item.id)}>–</button>
+                            <div className="qty">{enCarrito}</div>
+                          </>
+                        )}
+                        <button className="stepbtn plus" onClick={()=>agregarACarrito(item)}>+</button>
                       </div>
                     </div>
                   );
@@ -610,14 +622,10 @@ function InventarioTab({role, showToast}){
         onClick={()=>setShowFinalizar(true)}>
           <div>
             <div style={{fontWeight:800, fontSize:14}}>🧾 {carrito.reduce((s,c)=>s+c.cantidad,0)} producto{carrito.reduce((s,c)=>s+c.cantidad,0)!==1?"s":""} en el pedido</div>
-            <div style={{fontSize:12, opacity:0.75}}>Toca para finalizar</div>
+            <div style={{fontSize:12, opacity:0.75}}>Toca para cerrar el pedido</div>
           </div>
           <div style={{fontWeight:800, fontSize:18}}>${totalCarrito.toFixed(0)}</div>
         </div>
-      )}
-
-      {selling && (
-        <AgregarItemForm item={selling} onCancel={()=>setSelling(null)} onConfirm={(qty)=>agregarACarrito(selling, qty)}/>
       )}
 
       {showFinalizar && (
@@ -715,34 +723,6 @@ function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
   );
 }
 
-function AgregarItemForm({item, onCancel, onConfirm}){
-  const [qty, setQty] = useState("1");
-  const n = Math.max(1, Number(qty)||1);
-  const total = (item.precio||0) * n;
-  return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={e=>e.stopPropagation()}>
-        <div className="modal-handle"/>
-        <h3 className="display" style={{fontSize:20, marginTop:0}}>{item.nombre}</h3>
-        {(!item.precio || item.precio===0) && (
-          <div style={{fontSize:12, color:'var(--danger)', marginBottom:8}}>
-            Este producto no tiene precio configurado — edítalo para que cuente en tus reportes.
-          </div>
-        )}
-        <label>Cantidad</label>
-        <input type="number" value={qty} onChange={e=>setQty(e.target.value)} min="1" autoFocus/>
-        <div style={{marginTop:10, fontSize:15}}>
-          Subtotal: <strong>${total.toFixed(0)}</strong>
-        </div>
-        <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
-          <button className="btn btn-primary" onClick={()=>onConfirm(n)}>Agregar al pedido</button>
-          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCantidad, onFinalizar}){
   const [nombre, setNombre] = useState("");
   const [metodo, setMetodo] = useState("efectivo");
@@ -802,7 +782,7 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
 
         <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
           <button className="btn btn-primary" onClick={confirmar} disabled={enviando || carrito.length===0}>
-            {enviando ? "Guardando..." : "Confirmar pedido"}
+            {enviando ? "Guardando..." : "Cerrar pedido"}
           </button>
           <button className="btn btn-outline" onClick={onCancel} disabled={enviando}>Seguir agregando</button>
         </div>
@@ -1583,7 +1563,7 @@ function PedidosSub({role, showToast}){
       <div className="row" style={{marginTop:8}}>
         <span style={{fontWeight:700}}>${(p.total||0).toFixed(0)} · {p.metodoPago==="tarjeta"?"Tarjeta":"Efectivo"}</span>
         <div style={{display:'flex', gap:12}}>
-          {pendiente && <button className="btn-ghost" style={{width:'auto', padding:0, color:'var(--basil)', fontWeight:700}} onClick={()=>marcarListo(p)}>Marcar listo ✓</button>}
+          {pendiente && <button className="btn-ghost" style={{width:'auto', padding:0, color:'var(--basil)', fontWeight:700}} onClick={()=>marcarListo(p)}>Pedido finalizado ✓</button>}
           {role==="admin" && <button className="btn-ghost" style={{width:'auto', padding:0}} onClick={()=>eliminarPedido(p)}>Eliminar</button>}
         </div>
       </div>
@@ -1593,7 +1573,7 @@ function PedidosSub({role, showToast}){
   return (
     <div>
       <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
-        Pendientes ({pendientes.length})
+        En preparación ({pendientes.length})
       </div>
       {pendientes.length===0 && <div className="card"><div className="empty"><span className="ic">🧾</span>Sin pedidos pendientes.</div></div>}
       {pendientes.map(p=> <PedidoCard key={p.id} p={p} pendiente={true}/>)}
