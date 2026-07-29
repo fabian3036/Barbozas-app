@@ -297,6 +297,27 @@ function InventarioTab({role, showToast}){
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selling, setSelling] = useState(null);
+  const [carrito, setCarrito] = useState([]);
+  const [showFinalizar, setShowFinalizar] = useState(false);
+
+  const agregarACarrito = (item, qty)=>{
+    setCarrito(prev=>{
+      const idx = prev.findIndex(c=>c.id===item.id);
+      if(idx>=0){
+        const copia = [...prev];
+        copia[idx] = {...copia[idx], cantidad: copia[idx].cantidad + qty};
+        return copia;
+      }
+      return [...prev, {id:item.id, nombre:item.nombre, precio:item.precio||0, cantidad: qty}];
+    });
+    setSelling(null);
+  };
+
+  const quitarDeCarrito = (id)=> setCarrito(prev=>prev.filter(c=>c.id!==id));
+  const cambiarCantidadCarrito = (id, delta)=> setCarrito(prev=>prev.map(c=>
+    c.id===id ? {...c, cantidad: Math.max(1, c.cantidad+delta)} : c
+  ));
+  const totalCarrito = carrito.reduce((s,c)=>s+c.precio*c.cantidad,0);
 
   const list = sub==="insumos" ? insumos : productos;
   const colName = sub==="insumos" ? "insumos" : "productos";
@@ -426,46 +447,64 @@ function InventarioTab({role, showToast}){
     }
   };
 
-  const registrarVenta = async (item, cantidadVendida, metodoPago, clienteId)=>{
+  const finalizarPedido = async (items, nombre, metodoPago, clienteId)=>{
     try{
-      const qty = Math.max(1, Number(cantidadVendida)||1);
-      const precioUnitario = item.precio || 0;
-      const total = precioUnitario * qty;
-      await db.collection("productos").doc(item.id).update({cantidad: Math.max(0,(item.cantidad||0)-qty)});
-      await db.collection("ventas").add({
-        producto: item.nombre,
-        cantidad: qty,
-        precioUnitario,
-        total,
-        metodoPago: metodoPago || "efectivo",
-        fecha: new Date().toISOString(),
-      });
-      if(clienteId){
-        const cliente = clientes.find(c=>c.id===clienteId);
-        const esPizza = item.nombre.toLowerCase().includes("pizza");
+      let totalPedido = 0;
+      const cliente = clienteId ? clientes.find(c=>c.id===clienteId) : null;
+      let sellosSumados = 0;
+
+      for(const it of items){
+        const prodActual = productos.find(p=>p.id===it.id);
+        const total = it.precio * it.cantidad;
+        totalPedido += total;
+
+        await db.collection("productos").doc(it.id).update({
+          cantidad: Math.max(0, (prodActual?.cantidad||0) - it.cantidad)
+        });
+        await db.collection("ventas").add({
+          producto: it.nombre,
+          cantidad: it.cantidad,
+          precioUnitario: it.precio,
+          total,
+          metodoPago: metodoPago || "efectivo",
+          fecha: new Date().toISOString(),
+        });
+
         if(cliente){
+          const esPizza = it.nombre.toLowerCase().includes("pizza");
           if(esPizza){
-            await db.collection("clientes").doc(clienteId).update({sellos: (cliente.sellos||0)+1});
+            sellosSumados += 1;
           }
           await db.collection("compras").add({
-            clienteId,
+            clienteId: cliente.id,
             clienteNombre: cliente.nombre,
-            producto: item.nombre,
-            cantidad: qty,
+            producto: it.nombre,
+            cantidad: it.cantidad,
             total,
             cuentaSello: esPizza,
             fecha: new Date().toISOString(),
           });
         }
-        showToast(`Venta registrada — $${total.toFixed(0)}${clienteId ? (esPizza? " · +1 sello" : " · sin sello (no es pizza)") : ""}`);
-      }else{
-        showToast(`Venta registrada: ${qty} × ${item.nombre} — $${total.toFixed(0)}`);
       }
+
+      if(cliente && sellosSumados>0){
+        await db.collection("clientes").doc(cliente.id).update({sellos: (cliente.sellos||0)+sellosSumados});
+      }
+
+      await db.collection("pedidos").add({
+        nombre: (nombre||"").trim() || "Sin nombre",
+        items: items.map(it=>({producto:it.nombre, cantidad:it.cantidad, precioUnitario:it.precio})),
+        total: totalPedido,
+        metodoPago: metodoPago || "efectivo",
+        clienteId: cliente ? cliente.id : null,
+        estado: "pendiente",
+        fecha: new Date().toISOString(),
+      });
+
+      showToast(`Pedido registrado — $${totalPedido.toFixed(0)}${cliente && sellosSumados>0 ? ` · +${sellosSumados} sello${sellosSumados>1?"s":""}` : ""}`);
     }catch(e){
       console.error(e);
-      showToast("No se pudo registrar la venta — revisa tu conexión a Firebase");
-    }finally{
-      setSelling(null);
+      showToast("No se pudo registrar el pedido — revisa tu conexión a Firebase");
     }
   };
 
@@ -549,7 +588,7 @@ function InventarioTab({role, showToast}){
                         <div className="item-meta">${item.precio||0}{item.minimo!=null ? ` · mín. ${item.minimo}` : ""}</div>
                       </div>
                       <button className="stepbtn" style={{width:'auto', borderRadius:20, padding:'0 12px', fontSize:13, fontWeight:700, background:'var(--tomato)', borderColor:'var(--tomato)', color:'var(--mozz)', marginRight:6}}
-                        onClick={()=>setSelling(item)}>Vender</button>
+                        onClick={()=>setSelling(item)}>Agregar</button>
                       <div className="stepper">
                         <button className="stepbtn minus" onClick={()=>adjustQty(item,-1)}>–</button>
                         <div className={"qty"+(isLow?" low":"")}>{item.cantidad}</div>
@@ -566,8 +605,34 @@ function InventarioTab({role, showToast}){
 
       <button className="fab" onClick={()=>{setEditing(null); setShowForm(true);}}>+</button>
 
+      {carrito.length>0 && (
+        <div style={{position:'fixed', left:12, right:12, bottom:76, zIndex:26, background:'var(--char)', color:'var(--mozz)', borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 6px 18px rgba(0,0,0,0.3)'}}
+        onClick={()=>setShowFinalizar(true)}>
+          <div>
+            <div style={{fontWeight:800, fontSize:14}}>🧾 {carrito.reduce((s,c)=>s+c.cantidad,0)} producto{carrito.reduce((s,c)=>s+c.cantidad,0)!==1?"s":""} en el pedido</div>
+            <div style={{fontSize:12, opacity:0.75}}>Toca para finalizar</div>
+          </div>
+          <div style={{fontWeight:800, fontSize:18}}>${totalCarrito.toFixed(0)}</div>
+        </div>
+      )}
+
       {selling && (
-        <VentaForm item={selling} clientes={clientes} onCancel={()=>setSelling(null)} onConfirm={(qty, metodo, clienteId)=>registrarVenta(selling, qty, metodo, clienteId)}/>
+        <AgregarItemForm item={selling} onCancel={()=>setSelling(null)} onConfirm={(qty)=>agregarACarrito(selling, qty)}/>
+      )}
+
+      {showFinalizar && (
+        <FinalizarPedidoForm
+          carrito={carrito}
+          clientes={clientes}
+          onCancel={()=>setShowFinalizar(false)}
+          onQuitar={quitarDeCarrito}
+          onCambiarCantidad={cambiarCantidadCarrito}
+          onFinalizar={async (nombre, metodo, clienteId)=>{
+            await finalizarPedido(carrito, nombre, metodo, clienteId);
+            setCarrito([]);
+            setShowFinalizar(false);
+          }}
+        />
       )}
 
       {showForm && (
@@ -650,43 +715,96 @@ function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
   );
 }
 
-function VentaForm({item, clientes, onCancel, onConfirm}){
+function AgregarItemForm({item, onCancel, onConfirm}){
   const [qty, setQty] = useState("1");
-  const [metodo, setMetodo] = useState("efectivo");
-  const [clienteId, setClienteId] = useState("");
-  const [buscar, setBuscar] = useState("");
   const n = Math.max(1, Number(qty)||1);
   const total = (item.precio||0) * n;
-  const clientesFiltrados = (clientes||[]).filter(c=> c.nombre.toLowerCase().includes(buscar.toLowerCase())).sort((a,b)=>a.nombre.localeCompare(b.nombre));
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal" onClick={e=>e.stopPropagation()}>
         <div className="modal-handle"/>
-        <h3 className="display" style={{fontSize:20, marginTop:0}}>Vender {item.nombre}</h3>
+        <h3 className="display" style={{fontSize:20, marginTop:0}}>{item.nombre}</h3>
         {(!item.precio || item.precio===0) && (
           <div style={{fontSize:12, color:'var(--danger)', marginBottom:8}}>
-            Este producto no tiene precio configurado — edítalo para que la venta cuente en tus reportes.
+            Este producto no tiene precio configurado — edítalo para que cuente en tus reportes.
           </div>
         )}
-        <label>Cantidad vendida</label>
-        <input type="number" value={qty} onChange={e=>setQty(e.target.value)} min="1"/>
+        <label>Cantidad</label>
+        <input type="number" value={qty} onChange={e=>setQty(e.target.value)} min="1" autoFocus/>
+        <div style={{marginTop:10, fontSize:15}}>
+          Subtotal: <strong>${total.toFixed(0)}</strong>
+        </div>
+        <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
+          <button className="btn btn-primary" onClick={()=>onConfirm(n)}>Agregar al pedido</button>
+          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCantidad, onFinalizar}){
+  const [nombre, setNombre] = useState("");
+  const [metodo, setMetodo] = useState("efectivo");
+  const [clienteId, setClienteId] = useState("");
+  const [buscar, setBuscar] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const total = carrito.reduce((s,c)=>s+c.precio*c.cantidad,0);
+  const clientesFiltrados = (clientes||[]).filter(c=> c.nombre.toLowerCase().includes(buscar.toLowerCase())).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+
+  const confirmar = async ()=>{
+    if(carrito.length===0) return;
+    setEnviando(true);
+    await onFinalizar(nombre, metodo, clienteId||null);
+    setEnviando(false);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <h3 className="display" style={{fontSize:20, marginTop:0}}>Finalizar pedido</h3>
+
+        {carrito.map(c=>(
+          <div className="item-row" key={c.id}>
+            <div style={{flex:1}}>
+              <div className="item-name">{c.nombre}</div>
+              <div className="item-meta">${c.precio} c/u · ${(c.precio*c.cantidad).toFixed(0)}</div>
+            </div>
+            <div className="stepper">
+              <button className="stepbtn minus" onClick={()=>onCambiarCantidad(c.id,-1)} type="button">–</button>
+              <div className="qty">{c.cantidad}</div>
+              <button className="stepbtn plus" onClick={()=>onCambiarCantidad(c.id,1)} type="button">+</button>
+            </div>
+            <button className="btn-ghost" style={{width:'auto', padding:'0 0 0 10px'}} onClick={()=>onQuitar(c.id)} type="button">✕</button>
+          </div>
+        ))}
+
+        <label>Nombre del cliente o pedido</label>
+        <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej. Juan / Mesa 3 / Para llevar"/>
+
         <label>Método de pago</label>
         <div className="subtabs">
           <button className={"subtab"+(metodo==="efectivo"?" active":"")} onClick={()=>setMetodo("efectivo")} type="button">Efectivo</button>
           <button className={"subtab"+(metodo==="tarjeta"?" active":"")} onClick={()=>setMetodo("tarjeta")} type="button">Tarjeta</button>
         </div>
-        <label>Cliente (opcional, para sumar sello e historial)</label>
+
+        <label>Cliente de fidelización (opcional, para sumar sellos)</label>
         <input type="text" value={buscar} onChange={e=>{setBuscar(e.target.value); setClienteId("");}} placeholder="Buscar cliente por nombre"/>
         <select value={clienteId} onChange={e=>setClienteId(e.target.value)} style={{marginTop:8}}>
           <option value="">Sin cliente</option>
           {clientesFiltrados.map(c=> <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </select>
-        <div style={{marginTop:10, fontSize:15}}>
-          Total: <strong>${total.toFixed(0)}</strong>
+
+        <div style={{marginTop:12, fontSize:16, fontWeight:700}}>
+          Total: ${total.toFixed(0)}
         </div>
+
         <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
-          <button className="btn btn-primary" onClick={()=>onConfirm(n, metodo, clienteId||null)}>Confirmar venta</button>
-          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
+          <button className="btn btn-primary" onClick={confirmar} disabled={enviando || carrito.length===0}>
+            {enviando ? "Guardando..." : "Confirmar pedido"}
+          </button>
+          <button className="btn btn-outline" onClick={onCancel} disabled={enviando}>Seguir agregando</button>
         </div>
       </div>
     </div>
@@ -1428,17 +1546,80 @@ function IncidenciasSub({role, showToast}){
   );
 }
 
+function PedidosSub({role, showToast}){
+  const [pedidos] = useCollection("pedidos");
+  const pendientes = [...pedidos].filter(p=>p.estado!=="listo").sort((a,b)=> new Date(a.fecha)-new Date(b.fecha));
+  const completados = [...pedidos].filter(p=>p.estado==="listo").sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0,15);
+
+  const marcarListo = async (p)=>{
+    try{
+      await db.collection("pedidos").doc(p.id).update({estado:"listo"});
+      showToast("Pedido marcado como listo");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo actualizar — revisa tu conexión a Firebase");
+    }
+  };
+  const eliminarPedido = async (p)=>{
+    if(role!=="admin") return;
+    try{
+      await db.collection("pedidos").doc(p.id).delete();
+      showToast("Pedido eliminado");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo eliminar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const PedidoCard = ({p, pendiente})=>(
+    <div className="card" style={pendiente ? {borderColor:'var(--tomato)', background:'rgba(193,68,14,0.05)'} : {}}>
+      <div className="row" style={{marginBottom:6}}>
+        <div style={{fontWeight:800, fontSize:15}}>{p.nombre}</div>
+        <div style={{fontSize:12, color:'rgba(43,33,28,0.55)'}}>{fmtFechaHora(p.fecha)}</div>
+      </div>
+      {(p.items||[]).map((it,i)=>(
+        <div key={i} style={{fontSize:14, marginBottom:2}}>• {it.cantidad}× {it.producto}</div>
+      ))}
+      <div className="row" style={{marginTop:8}}>
+        <span style={{fontWeight:700}}>${(p.total||0).toFixed(0)} · {p.metodoPago==="tarjeta"?"Tarjeta":"Efectivo"}</span>
+        <div style={{display:'flex', gap:12}}>
+          {pendiente && <button className="btn-ghost" style={{width:'auto', padding:0, color:'var(--basil)', fontWeight:700}} onClick={()=>marcarListo(p)}>Marcar listo ✓</button>}
+          {role==="admin" && <button className="btn-ghost" style={{width:'auto', padding:0}} onClick={()=>eliminarPedido(p)}>Eliminar</button>}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
+        Pendientes ({pendientes.length})
+      </div>
+      {pendientes.length===0 && <div className="card"><div className="empty"><span className="ic">🧾</span>Sin pedidos pendientes.</div></div>}
+      {pendientes.map(p=> <PedidoCard key={p.id} p={p} pendiente={true}/>)}
+
+      <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', margin:'18px 0 10px', color:'var(--char-soft)'}}>
+        Completados recientes
+      </div>
+      {completados.length===0 && <div className="card"><div className="empty"><span className="ic">✓</span>Sin pedidos completados todavía.</div></div>}
+      {completados.map(p=> <PedidoCard key={p.id} p={p} pendiente={false}/>)}
+    </div>
+  );
+}
+
 function MasTab({role, showToast}){
-  const [sub, setSub] = useState("caja");
+  const [sub, setSub] = useState("pedidos");
   return (
     <div>
       <h2 className="section-title">Más herramientas</h2>
       <div className="subtabs">
+        <button className={"subtab"+(sub==="pedidos"?" active":"")} onClick={()=>setSub("pedidos")}>Pedidos</button>
         <button className={"subtab"+(sub==="caja"?" active":"")} onClick={()=>setSub("caja")}>Caja</button>
         <button className={"subtab"+(sub==="gastos"?" active":"")} onClick={()=>setSub("gastos")}>Gastos</button>
         <button className={"subtab"+(sub==="costos"?" active":"")} onClick={()=>setSub("costos")}>Costos</button>
         <button className={"subtab"+(sub==="notas"?" active":"")} onClick={()=>setSub("notas")}>Notas</button>
       </div>
+      {sub==="pedidos" && <PedidosSub role={role} showToast={showToast}/>}
       {sub==="caja" && <CajaSub role={role} showToast={showToast}/>}
       {sub==="gastos" && <GastosSub role={role} showToast={showToast}/>}
       {sub==="costos" && <CostosSub/>}
