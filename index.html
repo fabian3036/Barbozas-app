@@ -463,13 +463,9 @@ function InventarioTab({role, showToast}){
       let sellosSumados = 0;
 
       for(const it of items){
-        const prodActual = productos.find(p=>p.id===it.id);
         const total = it.precio * it.cantidad;
         totalPedido += total;
 
-        await db.collection("productos").doc(it.id).update({
-          cantidad: Math.max(0, (prodActual?.cantidad||0) - it.cantidad)
-        });
         await db.collection("ventas").add({
           producto: it.nombre,
           cantidad: it.cantidad,
@@ -589,13 +585,12 @@ function InventarioTab({role, showToast}){
                   {group.categoria}
                 </div>
                 {group.items.map(item=>{
-                  const isLow = item.minimo!=null && item.cantidad<=item.minimo;
                   const enCarrito = cantidadEnCarrito(item.id);
                   return (
                     <div className="item-row" key={item.id}>
                       <div onClick={()=>{setEditing(item); setShowForm(true);}} style={{flex:1}}>
-                        <div className="item-name">{item.nombre}{isLow && <span className="badge-low">Bajo</span>}</div>
-                        <div className="item-meta">${item.precio||0} · stock: {item.cantidad}{item.minimo!=null ? ` · mín. ${item.minimo}` : ""}</div>
+                        <div className="item-name">{item.nombre}</div>
+                        <div className="item-meta">${item.precio||0}</div>
                       </div>
                       <div className="stepper">
                         {enCarrito>0 && (
@@ -678,25 +673,29 @@ function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
         <h3 className="display" style={{fontSize:20, marginTop:0}}>{initial? "Editar":"Nuevo"} {tipo==="insumos"?"insumo":"producto"}</h3>
         <label>Nombre</label>
         <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder={tipo==="insumos"?"Ej. Harina 000":"Ej. Pizza Margarita"}/>
-        <div style={{display:'flex', gap:10}}>
-          <div style={{flex:1}}>
-            <label>Cantidad</label>
-            <input type="number" value={cantidad} onChange={e=>setCantidad(e.target.value)} placeholder="0"/>
-          </div>
-          <div style={{flex:1}}>
-            <label>Unidad</label>
-            <select value={unidad} onChange={e=>setUnidad(e.target.value)}>
-              <option value="kg">kg</option>
-              <option value="g">g</option>
-              <option value="l">l</option>
-              <option value="ml">ml</option>
-              <option value="pza">pza</option>
-              <option value="caja">caja</option>
-            </select>
-          </div>
-        </div>
-        <label>Stock mínimo (opcional, para alerta)</label>
-        <input type="number" value={minimo} onChange={e=>setMinimo(e.target.value)} placeholder="Ej. 5"/>
+        {tipo==="insumos" && (
+          <>
+            <div style={{display:'flex', gap:10}}>
+              <div style={{flex:1}}>
+                <label>Cantidad</label>
+                <input type="number" value={cantidad} onChange={e=>setCantidad(e.target.value)} placeholder="0"/>
+              </div>
+              <div style={{flex:1}}>
+                <label>Unidad</label>
+                <select value={unidad} onChange={e=>setUnidad(e.target.value)}>
+                  <option value="kg">kg</option>
+                  <option value="g">g</option>
+                  <option value="l">l</option>
+                  <option value="ml">ml</option>
+                  <option value="pza">pza</option>
+                  <option value="caja">caja</option>
+                </select>
+              </div>
+            </div>
+            <label>Stock mínimo (opcional, para alerta)</label>
+            <input type="number" value={minimo} onChange={e=>setMinimo(e.target.value)} placeholder="Ej. 5"/>
+          </>
+        )}
         {tipo==="productos" && (
           <>
             <label>Precio de venta (MXN)</label>
