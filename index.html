@@ -204,6 +204,10 @@ try{
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
   firebaseReady = true;
+  // Modo offline: guarda una copia local y sincroniza sola al recuperar internet
+  db.enablePersistence({synchronizeTabs: true}).catch(err=>{
+    console.warn("Persistencia offline no disponible:", err.code);
+  });
 }catch(e){
   console.error("Firebase no configurado todavía:", e);
 }
@@ -464,7 +468,7 @@ function InventarioTab({role, showToast}){
     }
   };
 
-  const finalizarPedido = async (items, nombre, metodoPago, clienteId)=>{
+  const finalizarPedido = async (items, nombre, metodoPago, clienteId, propina)=>{
     try{
       let totalPedido = 0;
       const cliente = clienteId ? clientes.find(c=>c.id===clienteId) : null;
@@ -498,13 +502,14 @@ function InventarioTab({role, showToast}){
         nombre: (nombre||"").trim() || "Sin nombre",
         items: items.map(it=>({producto:it.nombre, cantidad:it.cantidad, precioUnitario:it.precio})),
         total: totalPedido,
+        propina: propina || 0,
         metodoPago: metodoPago || "efectivo",
         clienteId: cliente ? cliente.id : null,
         estado: "pendiente",
         fecha: new Date().toISOString(),
       });
 
-      showToast(`Pedido registrado — $${totalPedido.toFixed(0)}`);
+      showToast(`Pedido registrado — $${totalPedido.toFixed(0)}${propina>0 ? ` + $${propina} propina` : ""}`);
     }catch(e){
       console.error(e);
       showToast("No se pudo registrar el pedido — revisa tu conexión a Firebase");
@@ -628,8 +633,8 @@ function InventarioTab({role, showToast}){
           onCancel={()=>setShowFinalizar(false)}
           onQuitar={quitarDeCarrito}
           onCambiarCantidad={cambiarCantidadCarrito}
-          onFinalizar={async (nombre, metodo, clienteId)=>{
-            await finalizarPedido(carrito, nombre, metodo, clienteId);
+          onFinalizar={async (nombre, metodo, clienteId, propina)=>{
+            await finalizarPedido(carrito, nombre, metodo, clienteId, propina);
             setCarrito([]);
             setShowFinalizar(false);
           }}
@@ -725,6 +730,7 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
   const [metodo, setMetodo] = useState("efectivo");
   const [clienteId, setClienteId] = useState("");
   const [buscar, setBuscar] = useState("");
+  const [propina, setPropina] = useState("");
   const [enviando, setEnviando] = useState(false);
   const total = carrito.reduce((s,c)=>s+c.precio*c.cantidad,0);
   const clientesFiltrados = (clientes||[]).filter(c=> c.nombre.toLowerCase().includes(buscar.toLowerCase())).sort((a,b)=>a.nombre.localeCompare(b.nombre));
@@ -732,7 +738,7 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
   const confirmar = async ()=>{
     if(carrito.length===0) return;
     setEnviando(true);
-    await onFinalizar(nombre, metodo, clienteId||null);
+    await onFinalizar(nombre, metodo, clienteId||null, Number(propina)||0);
     setEnviando(false);
   };
 
@@ -773,8 +779,11 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
           {clientesFiltrados.map(c=> <option key={c.id} value={c.id}>{c.nombre}</option>)}
         </select>
 
+        <label>Propina (opcional)</label>
+        <input type="number" value={propina} onChange={e=>setPropina(e.target.value)} placeholder="0"/>
+
         <div style={{marginTop:12, fontSize:16, fontWeight:700}}>
-          Total: ${total.toFixed(0)}
+          Total: ${total.toFixed(0)}{Number(propina)>0 && ` + $${Number(propina).toFixed(0)} propina = $${(total+Number(propina)).toFixed(0)}`}
         </div>
 
         <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
@@ -1169,14 +1178,18 @@ function fmtFechaHora(iso){
 function CajaSub({role, showToast}){
   const [ventas] = useCollection("ventas");
   const [cortes] = useCollection("cortes");
+  const [pedidos] = useCollection("pedidos");
 
   const ventasHoy = ventas.filter(v=>isToday(v.fecha));
   const totalEfectivo = ventasHoy.filter(v=>v.metodoPago!=="tarjeta").reduce((s,v)=>s+(v.total||0),0);
   const totalTarjeta = ventasHoy.filter(v=>v.metodoPago==="tarjeta").reduce((s,v)=>s+(v.total||0),0);
   const totalHoy = totalEfectivo+totalTarjeta;
+  const propinasHoy = pedidos.filter(p=>isToday(p.fecha)).reduce((s,p)=>s+(p.propina||0),0);
 
   const corteHoy = [...cortes].reverse().find(c=>isToday(c.fecha));
   const historial = [...cortes].sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0,10);
+  const horaActual = new Date().getHours();
+  const necesitaRecordatorio = horaActual>=21 && !corteHoy && totalHoy>0;
 
   const ingresosPorDia = useMemo(()=>{
     const map = {};
@@ -1218,6 +1231,13 @@ function CajaSub({role, showToast}){
 
   return (
     <div>
+      {necesitaRecordatorio && (
+        <div className="card" style={{borderColor:'var(--danger)', background:'rgba(179,38,30,0.06)'}}>
+          <div style={{fontWeight:800, fontSize:13, color:'var(--danger)'}}>
+            ⏰ Ya es tarde y no has cerrado la caja de hoy — no olvides hacerlo antes de irte.
+          </div>
+        </div>
+      )}
       <div className="card">
         <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', marginBottom:10, color:'var(--char-soft)'}}>
           Corte de hoy
@@ -1225,6 +1245,9 @@ function CajaSub({role, showToast}){
         <div className="row" style={{marginBottom:6}}><span>Efectivo</span><strong>${totalEfectivo.toFixed(0)}</strong></div>
         <div className="row" style={{marginBottom:6}}><span>Tarjeta</span><strong>${totalTarjeta.toFixed(0)}</strong></div>
         <div className="row" style={{borderTop:'1px solid var(--line)', paddingTop:8, marginTop:4}}><span style={{fontWeight:700}}>Total</span><strong style={{fontSize:18}}>${totalHoy.toFixed(0)}</strong></div>
+        {propinasHoy>0 && (
+          <div className="row" style={{marginTop:6}}><span>Propinas de hoy</span><strong>${propinasHoy.toFixed(0)}</strong></div>
+        )}
         {corteHoy && (
           <div style={{fontSize:12, color:'var(--danger)', marginTop:10}}>
             Ya cerraste la caja hoy a las {new Date(corteHoy.fecha).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}.
@@ -1636,6 +1659,17 @@ function AjustesTab({role, showToast}){
 }
 
 /* ---------------- APP ---------------- */
+function RecordatorioCajaDot(){
+  const [ventas] = useCollection("ventas");
+  const [cortes] = useCollection("cortes");
+  const horaActual = new Date().getHours();
+  const corteHoy = cortes.find(c=>isToday(c.fecha));
+  const ventasHoy = ventas.filter(v=>isToday(v.fecha));
+  const necesita = horaActual>=21 && !corteHoy && ventasHoy.length>0;
+  if(!necesita) return null;
+  return <span style={{position:'absolute', top:4, right:'28%', width:9, height:9, borderRadius:'50%', background:'var(--danger)', border:'1.5px solid var(--mozz)'}}/>;
+}
+
 function App(){
   const [role, setRole] = useState(()=>sessionStorage.getItem("barbozza_role"));
   const [tab, setTab] = useState("inventario");
@@ -1683,8 +1717,9 @@ function App(){
         <button className={"navbtn"+(tab==="clientes"?" active":"")} onClick={()=>setTab("clientes")}>
           <span className="ic">🍕</span>Clientes
         </button>
-        <button className={"navbtn"+(tab==="mas"?" active":"")} onClick={()=>setTab("mas")}>
+        <button className={"navbtn"+(tab==="mas"?" active":"")} onClick={()=>setTab("mas")} style={{position:'relative'}}>
           <span className="ic">🔧</span>Más
+          <RecordatorioCajaDot/>
         </button>
         <button className={"navbtn"+(tab==="ajustes"?" active":"")} onClick={()=>setTab("ajustes")}>
           <span className="ic">⚙️</span>Ajustes
