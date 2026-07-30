@@ -238,7 +238,7 @@ function PinScreen({onLogin}){
   const [error,setError] = useState("");
   const [config, setConfig] = useState(null);
 
-  const DEFAULT_CONFIG = {adminPin:"0000", staffPin:"1111", stampsGoal:STAMPS_GOAL};
+  const DEFAULT_CONFIG = {adminPin:"0000", staffPin:"1111"};
 
   useEffect(()=>{
     if(!firebaseReady){ setConfig(DEFAULT_CONFIG); return; }
@@ -417,7 +417,11 @@ function InventarioTab({role, showToast}){
         cantidad: Math.abs(delta),
         fecha: new Date().toISOString(),
       });
-      showToast(delta>0 ? `+${delta} ${item.nombre}` : `-${Math.abs(delta)} ${item.nombre}`);
+      if(sub==="insumos" && item.minimo!=null && newQty<=item.minimo){
+        showToast(`⚠ ${item.nombre} quedó bajo (${newQty}) — hay que resurtir`);
+      }else{
+        showToast(delta>0 ? `+${delta} ${item.nombre}` : `-${Math.abs(delta)} ${item.nombre}`);
+      }
     }catch(e){
       console.error(e);
       showToast("No se pudo guardar — revisa tu conexión a Firebase");
@@ -432,7 +436,11 @@ function InventarioTab({role, showToast}){
     try{
       if(editing){
         await db.collection(colName).doc(editing.id).update(form);
-        showToast("Actualizado");
+        if(sub==="insumos" && form.minimo!=null && (form.cantidad||0)<=form.minimo){
+          showToast(`⚠ ${form.nombre} quedó bajo (${form.cantidad}) — hay que resurtir`);
+        }else{
+          showToast("Actualizado");
+        }
       }else{
         await db.collection(colName).add({...form, cantidad: Number(form.cantidad)||0});
         showToast("Agregado");
@@ -460,7 +468,6 @@ function InventarioTab({role, showToast}){
     try{
       let totalPedido = 0;
       const cliente = clienteId ? clientes.find(c=>c.id===clienteId) : null;
-      let sellosSumados = 0;
 
       for(const it of items){
         const total = it.precio * it.cantidad;
@@ -476,24 +483,15 @@ function InventarioTab({role, showToast}){
         });
 
         if(cliente){
-          const esPizza = it.nombre.toLowerCase().includes("pizza");
-          if(esPizza){
-            sellosSumados += 1;
-          }
           await db.collection("compras").add({
             clienteId: cliente.id,
             clienteNombre: cliente.nombre,
             producto: it.nombre,
             cantidad: it.cantidad,
             total,
-            cuentaSello: esPizza,
             fecha: new Date().toISOString(),
           });
         }
-      }
-
-      if(cliente && sellosSumados>0){
-        await db.collection("clientes").doc(cliente.id).update({sellos: (cliente.sellos||0)+sellosSumados});
       }
 
       await db.collection("pedidos").add({
@@ -506,7 +504,7 @@ function InventarioTab({role, showToast}){
         fecha: new Date().toISOString(),
       });
 
-      showToast(`Pedido registrado — $${totalPedido.toFixed(0)}${cliente && sellosSumados>0 ? ` · +${sellosSumados} sello${sellosSumados>1?"s":""}` : ""}`);
+      showToast(`Pedido registrado — $${totalPedido.toFixed(0)}`);
     }catch(e){
       console.error(e);
       showToast("No se pudo registrar el pedido — revisa tu conexión a Firebase");
@@ -531,7 +529,7 @@ function InventarioTab({role, showToast}){
         );
       })()}
       <div className="subtabs">
-        <button className={"subtab"+(sub==="insumos"?" active":"")} onClick={()=>setSub("insumos")}>Insumos</button>
+        <button className={"subtab"+(sub==="insumos"?" active":"")} onClick={()=>setSub("insumos")}>Inventario</button>
         <button className={"subtab"+(sub==="productos"?" active":"")} onClick={()=>setSub("productos")}>Productos</button>
       </div>
       {sub==="productos" && productos.length>0 && (
@@ -768,7 +766,7 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
           <button className={"subtab"+(metodo==="tarjeta"?" active":"")} onClick={()=>setMetodo("tarjeta")} type="button">Tarjeta</button>
         </div>
 
-        <label>Cliente de fidelización (opcional, para sumar sellos)</label>
+        <label>Cliente (opcional, para su historial de compras)</label>
         <input type="text" value={buscar} onChange={e=>{setBuscar(e.target.value); setClienteId("");}} placeholder="Buscar cliente por nombre"/>
         <select value={clienteId} onChange={e=>setClienteId(e.target.value)} style={{marginTop:8}}>
           <option value="">Sin cliente</option>
@@ -790,48 +788,13 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
   );
 }
 
-/* ---------------- FIDELIZACIÓN (tarjeta de sellos) ---------------- */
-function PizzaProgress({sellos, goal}){
-  const filled = sellos % goal === 0 && sellos>0 ? goal : sellos % goal;
-  const slices = Array.from({length:goal});
-  const cx=32, cy=32, r=28;
-  const anglePer = 360/goal;
-  const polar = (cx,cy,r,angDeg)=>{
-    const a = (angDeg-90)*Math.PI/180;
-    return [cx + r*Math.cos(a), cy + r*Math.sin(a)];
-  };
-  return (
-    <div className="pizza-wrap">
-      <svg className="pizza-svg" viewBox="0 0 64 64">
-        <circle cx={cx} cy={cy} r={r} fill="#F2C94C" opacity="0.15"/>
-        {slices.map((_,i)=>{
-          const start = i*anglePer, end = (i+1)*anglePer;
-          const [x1,y1] = polar(cx,cy,r,start);
-          const [x2,y2] = polar(cx,cy,r,end);
-          const large = anglePer>180 ? 1 : 0;
-          const path = `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z`;
-          const on = i < filled;
-          return <path key={i} className="slice" d={path} fill={on? "#C1440E":"none"} stroke="#2B211C" strokeWidth="1" opacity={on?1:0.25}/>;
-        })}
-      </svg>
-    </div>
-  );
-}
-
 function ClientesTab({role, showToast}){
   const [clientes] = useCollection("clientes");
   const [compras] = useCollection("compras");
-  const [config, setConfig] = useState({stampsGoal:STAMPS_GOAL});
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
-
-  useEffect(()=>{
-    if(!firebaseReady) return;
-    db.collection("config").doc("settings").get().then(doc=>{ if(doc.exists) setConfig(doc.data()); });
-  },[]);
-
-  const goal = config.stampsGoal || STAMPS_GOAL;
+  const [periodo, setPeriodo] = useState("mes");
 
   const filtered = useMemo(()=>{
     const q = query.trim().toLowerCase();
@@ -840,35 +803,24 @@ function ClientesTab({role, showToast}){
     return list.filter(c=> c.nombre.toLowerCase().includes(q) || (c.telefono||"").includes(q));
   },[clientes, query]);
 
-  const addSello = async (cliente)=>{
-    try{
-      const nuevos = (cliente.sellos||0)+1;
-      await db.collection("clientes").doc(cliente.id).update({sellos:nuevos});
-      if(nuevos % goal === 0){
-        showToast(`🎉 ${cliente.nombre} llegó a ${goal} — ¡premio disponible!`);
-      }else{
-        showToast(`Sello agregado a ${cliente.nombre} (${nuevos % goal}/${goal})`);
-      }
-    }catch(e){
-      console.error(e);
-      showToast("No se pudo guardar — revisa tu conexión a Firebase");
-    }
-  };
+  const desdeFiltro = useMemo(()=>{
+    const now = new Date();
+    if(periodo==="semana") return startOfWeek(now);
+    if(periodo==="mes") return startOfMonth(now);
+    return new Date(0);
+  },[periodo]);
 
-  const canjear = async (cliente)=>{
-    try{
-      await db.collection("clientes").doc(cliente.id).update({
-        sellos: 0,
-        canjes: firebase.firestore.FieldValue.arrayUnion(new Date().toISOString())
-      });
-      showToast(`Premio canjeado — ${cliente.nombre}`);
-    }catch(e){
-      console.error(e);
-      showToast("No se pudo guardar — revisa tu conexión a Firebase");
-    }finally{
-      setSelected(null);
-    }
-  };
+  const ranking = useMemo(()=>{
+    const map = {};
+    compras.filter(c=> new Date(c.fecha)>=desdeFiltro).forEach(c=>{
+      if(!c.clienteId) return;
+      if(!map[c.clienteId]) map[c.clienteId] = {clienteId:c.clienteId, nombre:c.clienteNombre, total:0, compras:0};
+      map[c.clienteId].total += c.total||0;
+      map[c.clienteId].compras += 1;
+    });
+    return Object.values(map).sort((a,b)=>b.total-a.total).slice(0,10);
+  },[compras, desdeFiltro]);
+  const maxTotal = ranking.length ? ranking[0].total : 0;
 
   const addCliente = async (form)=>{
     if(!form.nombre || !form.nombre.trim()){
@@ -876,7 +828,7 @@ function ClientesTab({role, showToast}){
       return;
     }
     try{
-      await db.collection("clientes").add({nombre:form.nombre.trim(), telefono:form.telefono.trim(), sellos:0, canjes:[]});
+      await db.collection("clientes").add({nombre:form.nombre.trim(), telefono:form.telefono.trim()});
       showToast("Cliente agregado");
     }catch(e){
       console.error(e);
@@ -902,24 +854,47 @@ function ClientesTab({role, showToast}){
   return (
     <div>
       <h2 className="section-title">Clientes</h2>
+
+      <div className="card">
+        <div className="row" style={{marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', color:'var(--char-soft)'}}>
+            Quién más compra
+          </div>
+        </div>
+        <div className="subtabs">
+          <button className={"subtab"+(periodo==="semana"?" active":"")} onClick={()=>setPeriodo("semana")}>Semana</button>
+          <button className={"subtab"+(periodo==="mes"?" active":"")} onClick={()=>setPeriodo("mes")}>Mes</button>
+          <button className={"subtab"+(periodo==="todo"?" active":"")} onClick={()=>setPeriodo("todo")}>Todo</button>
+        </div>
+        {ranking.length===0 && (
+          <div className="empty"><span className="ic">🏆</span>Sin compras vinculadas a clientes todavía en este periodo.</div>
+        )}
+        {ranking.map((r,i)=>(
+          <div key={r.clienteId} style={{marginBottom:12}}>
+            <div className="row" style={{marginBottom:4}}>
+              <span style={{fontWeight:600, fontSize:14}}>{i+1}. {r.nombre}</span>
+              <span style={{fontSize:13, color:'rgba(43,33,28,0.6)'}}>{r.compras} compra{r.compras!==1?"s":""} · ${r.total.toFixed(0)}</span>
+            </div>
+            <div style={{background:'var(--line)', borderRadius:6, height:8, overflow:'hidden'}}>
+              <div style={{width:`${maxTotal? (r.total/maxTotal*100):0}%`, background:'var(--tomato)', height:'100%'}}/>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <input type="text" placeholder="Buscar por nombre o teléfono" value={query} onChange={e=>setQuery(e.target.value)} style={{marginBottom:12}}/>
       <div className="card">
         {filtered.length===0 && (
           <div className="empty"><span className="ic">🍕</span>Sin clientes todavía. Agrega el primero.</div>
         )}
-        {filtered.map(c=>{
-          const current = (c.sellos||0) % goal;
-          const readyForFree = (c.sellos||0)>0 && current===0;
-          return (
-            <div className="client-card" key={c.id} onClick={()=>setSelected(c)}>
-              <PizzaProgress sellos={c.sellos||0} goal={goal}/>
-              <div style={{flex:1}}>
-                <div className="client-name">{c.nombre} {readyForFree && <span className="free-tag">Premio</span>}</div>
-                <div className="client-phone">{c.telefono} · {current}/{goal} sellos</div>
-              </div>
+        {filtered.map(c=>(
+          <div className="client-card" key={c.id} onClick={()=>setSelected(c)}>
+            <div style={{flex:1}}>
+              <div className="client-name">{c.nombre}</div>
+              <div className="client-phone">{c.telefono}</div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       <button className="fab" onClick={()=>setShowForm(true)}>+</button>
@@ -939,14 +914,10 @@ function ClientesTab({role, showToast}){
             <div className="modal-handle"/>
             <h3 className="display" style={{fontSize:22, marginTop:0}}>{selected.nombre}</h3>
             <div style={{color:'rgba(43,33,28,0.6)', fontSize:13, marginBottom:14}}>{selected.telefono}</div>
-            <PizzaProgress sellos={selected.sellos||0} goal={goal}/>
-            <div style={{textAlign:'center', margin:'10px 0 18px', fontSize:14}}>
-              {(selected.sellos||0)%goal} de {goal} sellos
-              {(selected.sellos||0)>0 && (selected.sellos||0)%goal===0 && <div style={{color:'var(--gold)', fontWeight:700, marginTop:4}}>¡Premio disponible!</div>}
-            </div>
             {(() => {
               const inicioMes = startOfMonth(new Date());
               const comprasCliente = compras.filter(c=>c.clienteId===selected.id && new Date(c.fecha)>=inicioMes);
+              const totalMes = comprasCliente.reduce((s,c)=>s+(c.total||0),0);
               const resumen = {};
               comprasCliente.forEach(c=>{
                 if(!resumen[c.producto]) resumen[c.producto]=0;
@@ -957,7 +928,7 @@ function ClientesTab({role, showToast}){
                 <div className="card" style={{textAlign:'left'}}>
                   <div className="row" style={{marginBottom:8}}>
                     <span style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', color:'var(--char-soft)'}}>Este mes</span>
-                    <span style={{fontWeight:800, fontSize:15}}>{comprasCliente.length} compra{comprasCliente.length!==1?"s":""}</span>
+                    <span style={{fontWeight:800, fontSize:15}}>{comprasCliente.length} compra{comprasCliente.length!==1?"s":""} · ${totalMes.toFixed(0)}</span>
                   </div>
                   {items.length===0 && <div style={{fontSize:13, color:'rgba(43,33,28,0.5)'}}>Sin compras vinculadas todavía este mes.</div>}
                   {items.map(([nombre, cant])=>(
@@ -969,9 +940,6 @@ function ClientesTab({role, showToast}){
               );
             })()}
             <div style={{display:'flex', flexDirection:'column', gap:10}}>
-              <button className="btn btn-primary" onClick={()=>addSello(selected)}>+ Agregar sello</button>
-              {(selected.sellos||0)>0 && (selected.sellos||0)%goal===0 &&
-                <button className="btn btn-secondary" onClick={()=>canjear(selected)}>Canjear premio</button>}
               <button className="btn btn-outline" onClick={()=>setSelected(null)}>Cerrar</button>
               {role==="admin" && <button className="btn btn-ghost" onClick={()=>deleteCliente(selected)}>Eliminar cliente</button>}
             </div>
@@ -1578,7 +1546,7 @@ function PedidosSub({role, showToast}){
       {pendientes.map(p=> <PedidoCard key={p.id} p={p} pendiente={true}/>)}
 
       <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', margin:'18px 0 10px', color:'var(--char-soft)'}}>
-        Completados recientes
+        Pedido entregado
       </div>
       {completados.length===0 && <div className="card"><div className="empty"><span className="ic">✓</span>Sin pedidos completados todavía.</div></div>}
       {completados.map(p=> <PedidoCard key={p.id} p={p} pendiente={false}/>)}
@@ -1615,7 +1583,7 @@ function AjustesTab({role, showToast}){
   const saveTimer = useRef(null);
 
   useEffect(()=>{
-    const DEFAULT_CONFIG = {adminPin:"0000", staffPin:"1111", stampsGoal:STAMPS_GOAL};
+    const DEFAULT_CONFIG = {adminPin:"0000", staffPin:"1111"};
     if(!firebaseReady){ setConfig(DEFAULT_CONFIG); loadedRef.current = true; return; }
     db.collection("config").doc("settings").get().then(doc=>{
       if(doc.exists) setConfig(doc.data());
@@ -1659,8 +1627,6 @@ function AjustesTab({role, showToast}){
         <input type="text" inputMode="numeric" maxLength="4" value={config.adminPin} onChange={e=>setConfig({...config, adminPin:e.target.value})}/>
         <label>PIN de personal</label>
         <input type="text" inputMode="numeric" maxLength="4" value={config.staffPin} onChange={e=>setConfig({...config, staffPin:e.target.value})}/>
-        <label>Sellos para premio gratis</label>
-        <input type="number" value={config.stampsGoal} onChange={e=>setConfig({...config, stampsGoal:Number(e.target.value)})}/>
         <div style={{marginTop:14, fontSize:12, color:'var(--basil)', fontWeight:600}}>
           <span className="savingdot"></span>Guardado automático{savedTick>0 ? " ✓" : ""}
         </div>
