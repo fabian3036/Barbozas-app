@@ -302,6 +302,7 @@ function InventarioTab({role, showToast}){
   const [editing, setEditing] = useState(null);
   const [carrito, setCarrito] = useState([]);
   const [showFinalizar, setShowFinalizar] = useState(false);
+  const [showMitad, setShowMitad] = useState(false);
 
   const agregarACarrito = (item)=>{
     setCarrito(prev=>{
@@ -326,6 +327,15 @@ function InventarioTab({role, showToast}){
 
   const cantidadEnCarrito = (id)=> carrito.find(c=>c.id===id)?.cantidad || 0;
 
+  const agregarMitadYMitad = (pizza1, pizza2)=>{
+    const precio = Math.max(pizza1.precio||0, pizza2.precio||0);
+    const nombre = `Mitad ${pizza1.nombre} / Mitad ${pizza2.nombre}`;
+    const id = `mitad-${pizza1.id}-${pizza2.id}-${Date.now()}`;
+    setCarrito(prev=>[...prev, {id, nombre, precio, cantidad:1}]);
+    setShowMitad(false);
+    showToast(`Agregada: ${nombre}`);
+  };
+
   const quitarDeCarrito = (id)=> setCarrito(prev=>prev.filter(c=>c.id!==id));
   const cambiarCantidadCarrito = (id, delta)=> setCarrito(prev=>prev.map(c=>
     c.id===id ? {...c, cantidad: Math.max(1, c.cantidad+delta)} : c
@@ -336,7 +346,7 @@ function InventarioTab({role, showToast}){
   const colName = sub==="insumos" ? "insumos" : "productos";
   const sorted = useMemo(()=>[...list].sort((a,b)=>a.nombre.localeCompare(b.nombre)),[list]);
 
-  const CATEGORY_ORDER = ["Pizzas Clásicas","Especiales","Tortas y Extras","Aguas Frescas","Otros"];
+  const CATEGORY_ORDER = ["Pizzas Clásicas","Especiales","Extras","Tortas y Extras","Aguas Frescas","Otros"];
   const grouped = useMemo(()=>{
     if(sub!=="productos") return null;
     const map = {};
@@ -539,6 +549,7 @@ function InventarioTab({role, showToast}){
       </div>
       {sub==="productos" && productos.length>0 && (
         <div style={{textAlign:'right', marginBottom:8, display:'flex', flexDirection:'column', gap:4}}>
+          <button className="btn-primary" style={{width:'auto', alignSelf:'flex-end', borderRadius:20, padding:'8px 16px', fontSize:13, marginBottom:2}} onClick={()=>setShowMitad(true)}>🍕 Armar mitad y mitad</button>
           <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:12, alignSelf:'flex-end'}} onClick={cargarMenu}>+ Completar con menú de Barbozza's</button>
           <button className="btn-ghost" style={{width:'auto', padding:0, fontSize:12, alignSelf:'flex-end'}} onClick={quitarDuplicados}>🧹 Quitar duplicados</button>
         </div>
@@ -641,6 +652,14 @@ function InventarioTab({role, showToast}){
         />
       )}
 
+      {showMitad && (
+        <MitadPizzaForm
+          productos={productos}
+          onCancel={()=>setShowMitad(false)}
+          onConfirm={agregarMitadYMitad}
+        />
+      )}
+
       {showForm && (
         <ItemForm
           initial={editing}
@@ -709,6 +728,7 @@ function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
             <select value={categoria} onChange={e=>setCategoria(e.target.value)}>
               <option>Pizzas Clásicas</option>
               <option>Especiales</option>
+              <option>Extras</option>
               <option>Tortas y Extras</option>
               <option>Aguas Frescas</option>
               <option>Otros</option>
@@ -719,6 +739,48 @@ function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
           <button className="btn btn-primary" onClick={submit}>Guardar</button>
           <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
           {onDelete && <button className="btn btn-ghost" onClick={onDelete}>Eliminar {tipo==="insumos"?"insumo":"producto"}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MitadPizzaForm({productos, onCancel, onConfirm}){
+  const pizzas = productos.filter(p=> p.categoria==="Pizzas Clásicas" || p.categoria==="Especiales").sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const [id1, setId1] = useState("");
+  const [id2, setId2] = useState("");
+  const pizza1 = pizzas.find(p=>p.id===id1);
+  const pizza2 = pizzas.find(p=>p.id===id2);
+  const precioFinal = pizza1 && pizza2 ? Math.max(pizza1.precio||0, pizza2.precio||0) : 0;
+
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle"/>
+        <h3 className="display" style={{fontSize:20, marginTop:0}}>Pizza mitad y mitad</h3>
+
+        <label>Primera mitad</label>
+        <select value={id1} onChange={e=>setId1(e.target.value)}>
+          <option value="">Elige un sabor</option>
+          {pizzas.map(p=> <option key={p.id} value={p.id} disabled={p.id===id2}>{p.nombre} — ${p.precio}</option>)}
+        </select>
+
+        <label>Segunda mitad</label>
+        <select value={id2} onChange={e=>setId2(e.target.value)}>
+          <option value="">Elige un sabor</option>
+          {pizzas.map(p=> <option key={p.id} value={p.id} disabled={p.id===id1}>{p.nombre} — ${p.precio}</option>)}
+        </select>
+
+        {pizza1 && pizza2 && (
+          <div style={{marginTop:12, fontSize:14}}>
+            <div style={{fontWeight:700}}>Mitad {pizza1.nombre} / Mitad {pizza2.nombre}</div>
+            <div style={{color:'rgba(43,33,28,0.6)', marginTop:2}}>Se cobra el precio más alto de las dos: <strong>${precioFinal}</strong></div>
+          </div>
+        )}
+
+        <div style={{marginTop:18, display:'flex', flexDirection:'column', gap:10}}>
+          <button className="btn btn-primary" disabled={!pizza1||!pizza2} onClick={()=>onConfirm(pizza1, pizza2)}>Agregar al pedido</button>
+          <button className="btn btn-outline" onClick={onCancel}>Cancelar</button>
         </div>
       </div>
     </div>
