@@ -346,7 +346,7 @@ function InventarioTab({role, showToast}){
   const colName = sub==="insumos" ? "insumos" : "productos";
   const sorted = useMemo(()=>[...list].sort((a,b)=>a.nombre.localeCompare(b.nombre)),[list]);
 
-  const CATEGORY_ORDER = ["Pizzas Clásicas","Especiales","Extras","Tortas y Extras","Aguas Frescas","Otros"];
+  const CATEGORY_ORDER = ["Pizzas Clásicas","Especiales","Extras","Aderezos","Tortas y Extras","Aguas Frescas","Otros"];
   const grouped = useMemo(()=>{
     if(sub!=="productos") return null;
     const map = {};
@@ -731,6 +731,7 @@ function ItemForm({initial, tipo, onCancel, onSave, onDelete}){
               <option>Pizzas Clásicas</option>
               <option>Especiales</option>
               <option>Extras</option>
+              <option>Aderezos</option>
               <option>Tortas y Extras</option>
               <option>Aguas Frescas</option>
               <option>Otros</option>
