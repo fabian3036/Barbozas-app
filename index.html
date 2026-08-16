@@ -1625,8 +1625,10 @@ function IncidenciasSub({role, showToast}){
 
 function PedidosSub({role, showToast}){
   const [pedidos] = useCollection("pedidos");
+  const [limiteCompletados, setLimiteCompletados] = useState(15);
   const pendientes = [...pedidos].filter(p=>p.estado!=="listo").sort((a,b)=> new Date(a.fecha)-new Date(b.fecha));
-  const completados = [...pedidos].filter(p=>p.estado==="listo").sort((a,b)=> new Date(b.fecha)-new Date(a.fecha)).slice(0,15);
+  const completadosTodos = [...pedidos].filter(p=>p.estado==="listo").sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
+  const completados = completadosTodos.slice(0, limiteCompletados);
 
   const marcarListo = async (p)=>{
     try{
@@ -1680,6 +1682,11 @@ function PedidosSub({role, showToast}){
       </div>
       {completados.length===0 && <div className="card"><div className="empty"><span className="ic">✓</span>Sin pedidos completados todavía.</div></div>}
       {completados.map(p=> <PedidoCard key={p.id} p={p} pendiente={false}/>)}
+      {completadosTodos.length > completados.length && (
+        <button className="btn btn-outline" onClick={()=>setLimiteCompletados(n=>n+15)}>
+          Ver más ({completadosTodos.length - completados.length} más)
+        </button>
+      )}
     </div>
   );
 }
