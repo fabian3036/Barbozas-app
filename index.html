@@ -478,7 +478,7 @@ function InventarioTab({role, showToast}){
     }
   };
 
-  const finalizarPedido = async (items, nombre, metodoPago, clienteId, propina, canal)=>{
+  const finalizarPedido = async (items, nombre, metodoPago, clienteId, propina, canal, pagado)=>{
     try{
       let totalPedido = 0;
       const cliente = clienteId ? clientes.find(c=>c.id===clienteId) : null;
@@ -516,6 +516,7 @@ function InventarioTab({role, showToast}){
         propina: propina || 0,
         metodoPago: metodoPago || "efectivo",
         canal: canal || "Sucursal",
+        pagado: pagado!==false,
         clienteId: cliente ? cliente.id : null,
         estado: "pendiente",
         fecha: new Date().toISOString(),
@@ -646,8 +647,8 @@ function InventarioTab({role, showToast}){
           onCancel={()=>setShowFinalizar(false)}
           onQuitar={quitarDeCarrito}
           onCambiarCantidad={cambiarCantidadCarrito}
-          onFinalizar={async (nombre, metodo, clienteId, propina, canal)=>{
-            await finalizarPedido(carrito, nombre, metodo, clienteId, propina, canal);
+          onFinalizar={async (nombre, metodo, clienteId, propina, canal, pagado)=>{
+            await finalizarPedido(carrito, nombre, metodo, clienteId, propina, canal, pagado);
             setCarrito([]);
             setShowFinalizar(false);
           }}
@@ -794,6 +795,7 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
   const [nombre, setNombre] = useState("");
   const [metodo, setMetodo] = useState("efectivo");
   const [canal, setCanal] = useState("Sucursal");
+  const [pagado, setPagado] = useState(true);
   const [clienteId, setClienteId] = useState("");
   const [buscar, setBuscar] = useState("");
   const [propina, setPropina] = useState("");
@@ -804,7 +806,7 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
   const confirmar = async ()=>{
     if(carrito.length===0) return;
     setEnviando(true);
-    await onFinalizar(nombre, metodo, clienteId||null, Number(propina)||0, canal);
+    await onFinalizar(nombre, metodo, clienteId||null, Number(propina)||0, canal, pagado);
     setEnviando(false);
   };
 
@@ -844,6 +846,12 @@ function FinalizarPedidoForm({carrito, clientes, onCancel, onQuitar, onCambiarCa
         <div className="subtabs">
           <button className={"subtab"+(metodo==="efectivo"?" active":"")} onClick={()=>setMetodo("efectivo")} type="button">Efectivo</button>
           <button className={"subtab"+(metodo==="tarjeta"?" active":"")} onClick={()=>setMetodo("tarjeta")} type="button">Tarjeta</button>
+        </div>
+
+        <label>Estado de pago</label>
+        <div className="subtabs">
+          <button className={"subtab"+(pagado?" active":"")} onClick={()=>setPagado(true)} type="button">✓ Pagado</button>
+          <button className={"subtab"+(!pagado?" active":"")} onClick={()=>setPagado(false)} type="button" style={!pagado?{background:'var(--danger)', borderColor:'var(--danger)'}:{}}>Pendiente</button>
         </div>
 
         <label>Cliente (opcional, para su historial de compras)</label>
@@ -1625,15 +1633,35 @@ function IncidenciasSub({role, showToast}){
 
 function PedidosSub({role, showToast}){
   const [pedidos] = useCollection("pedidos");
-  const [limiteCompletados, setLimiteCompletados] = useState(15);
+  const [diasVisibles, setDiasVisibles] = useState(5);
   const pendientes = [...pedidos].filter(p=>p.estado!=="listo").sort((a,b)=> new Date(a.fecha)-new Date(b.fecha));
   const completadosTodos = [...pedidos].filter(p=>p.estado==="listo").sort((a,b)=> new Date(b.fecha)-new Date(a.fecha));
-  const completados = completadosTodos.slice(0, limiteCompletados);
+
+  const gruposPorDia = useMemo(()=>{
+    const map = {};
+    completadosTodos.forEach(p=>{
+      const key = new Date(p.fecha).toISOString().slice(0,10);
+      if(!map[key]) map[key] = [];
+      map[key].push(p);
+    });
+    return Object.entries(map).sort((a,b)=> b[0].localeCompare(a[0]));
+  },[completadosTodos]);
+  const gruposVisibles = gruposPorDia.slice(0, diasVisibles);
 
   const marcarListo = async (p)=>{
     try{
       await db.collection("pedidos").doc(p.id).update({estado:"listo"});
       showToast("Pedido marcado como listo");
+    }catch(e){
+      console.error(e);
+      showToast("No se pudo actualizar — revisa tu conexión a Firebase");
+    }
+  };
+
+  const marcarPagado = async (p)=>{
+    try{
+      await db.collection("pedidos").doc(p.id).update({pagado:true});
+      showToast("Pedido marcado como pagado");
     }catch(e){
       console.error(e);
       showToast("No se pudo actualizar — revisa tu conexión a Firebase");
@@ -1653,7 +1681,10 @@ function PedidosSub({role, showToast}){
   const PedidoCard = ({p, pendiente})=>(
     <div className="card" style={pendiente ? {borderColor:'var(--tomato)', background:'rgba(193,68,14,0.05)'} : {}}>
       <div className="row" style={{marginBottom:6}}>
-        <div style={{fontWeight:800, fontSize:15}}>{p.nombre} {p.canal && p.canal!=="Sucursal" && <span className="badge-low" style={{background:'rgba(76,100,68,0.12)', color:'var(--basil)'}}>{p.canal}</span>}</div>
+        <div style={{fontWeight:800, fontSize:15}}>
+          {p.nombre} {p.canal && p.canal!=="Sucursal" && <span className="badge-low" style={{background:'rgba(76,100,68,0.12)', color:'var(--basil)'}}>{p.canal}</span>}
+          {p.pagado===false && <span className="badge-low">Pendiente de pago</span>}
+        </div>
         <div style={{fontSize:12, color:'rgba(43,33,28,0.55)'}}>{fmtFechaHora(p.fecha)}</div>
       </div>
       {(p.items||[]).map((it,i)=>(
@@ -1661,7 +1692,8 @@ function PedidosSub({role, showToast}){
       ))}
       <div className="row" style={{marginTop:8}}>
         <span style={{fontWeight:700}}>${(p.total||0).toFixed(0)} · {p.metodoPago==="tarjeta"?"Tarjeta":"Efectivo"}</span>
-        <div style={{display:'flex', gap:12}}>
+        <div style={{display:'flex', gap:12, flexWrap:'wrap', justifyContent:'flex-end'}}>
+          {p.pagado===false && <button className="btn-ghost" style={{width:'auto', padding:0, color:'var(--danger)', fontWeight:700}} onClick={()=>marcarPagado(p)}>Marcar pagado</button>}
           {pendiente && <button className="btn-ghost" style={{width:'auto', padding:0, color:'var(--basil)', fontWeight:700}} onClick={()=>marcarListo(p)}>Pedido finalizado ✓</button>}
           {role==="admin" && <button className="btn-ghost" style={{width:'auto', padding:0}} onClick={()=>eliminarPedido(p)}>Eliminar</button>}
         </div>
@@ -1680,11 +1712,26 @@ function PedidosSub({role, showToast}){
       <div style={{fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.03em', margin:'18px 0 10px', color:'var(--char-soft)'}}>
         Pedido entregado
       </div>
-      {completados.length===0 && <div className="card"><div className="empty"><span className="ic">✓</span>Sin pedidos completados todavía.</div></div>}
-      {completados.map(p=> <PedidoCard key={p.id} p={p} pendiente={false}/>)}
-      {completadosTodos.length > completados.length && (
-        <button className="btn btn-outline" onClick={()=>setLimiteCompletados(n=>n+15)}>
-          Ver más ({completadosTodos.length - completados.length} más)
+      {gruposPorDia.length===0 && <div className="card"><div className="empty"><span className="ic">✓</span>Sin pedidos completados todavía.</div></div>}
+      {gruposVisibles.map(([fechaKey, pedidosDelDia])=>{
+        const fechaObj = new Date(fechaKey+"T00:00:00");
+        const totalDia = pedidosDelDia.reduce((s,p)=>s+(p.total||0),0);
+        const esHoy = isToday(fechaObj.toISOString());
+        return (
+          <div key={fechaKey} style={{marginBottom:16}}>
+            <div className="row" style={{marginBottom:8, padding:'0 2px'}}>
+              <span style={{fontWeight:800, fontSize:14, textTransform:'capitalize'}}>
+                {fechaObj.toLocaleDateString('es-MX',{weekday:'long', day:'2-digit', month:'short'})}{esHoy?" · hoy":""}
+              </span>
+              <span style={{fontSize:13, color:'rgba(43,33,28,0.6)'}}>{pedidosDelDia.length} pedido{pedidosDelDia.length!==1?"s":""} · ${totalDia.toFixed(0)}</span>
+            </div>
+            {pedidosDelDia.map(p=> <PedidoCard key={p.id} p={p} pendiente={false}/>)}
+          </div>
+        );
+      })}
+      {gruposPorDia.length > gruposVisibles.length && (
+        <button className="btn btn-outline" onClick={()=>setDiasVisibles(n=>n+5)}>
+          Ver más días ({gruposPorDia.length - gruposVisibles.length} más)
         </button>
       )}
     </div>
