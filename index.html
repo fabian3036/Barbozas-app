@@ -1285,6 +1285,13 @@ function isToday(fechaISO){
   const d = new Date(fechaISO), n = new Date();
   return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
 }
+function localDateKey(fechaISO){
+  const d = new Date(fechaISO);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
 function fmtFechaHora(iso){
   const d = new Date(iso);
   return d.toLocaleDateString('es-MX',{day:'2-digit',month:'short'}) + " " + d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
@@ -1309,8 +1316,7 @@ function CajaSub({role, showToast}){
   const ingresosPorDia = useMemo(()=>{
     const map = {};
     ventas.forEach(v=>{
-      const d = new Date(v.fecha);
-      const key = d.toISOString().slice(0,10);
+      const key = localDateKey(v.fecha);
       if(!map[key]) map[key] = {fecha:key, total:0, efectivo:0, tarjeta:0};
       map[key].total += v.total||0;
       if(v.metodoPago==="tarjeta") map[key].tarjeta += v.total||0; else map[key].efectivo += v.total||0;
@@ -1485,7 +1491,7 @@ function GastoForm({onCancel, onSave}){
   const [concepto,setConcepto] = useState("");
   const [monto,setMonto] = useState("");
   const [categoria,setCategoria] = useState("Renta");
-  const [fecha,setFecha] = useState(new Date().toISOString().slice(0,10));
+  const [fecha,setFecha] = useState(localDateKey(new Date().toISOString()));
   const submit = ()=>{
     onSave({concepto:concepto.trim(), monto:Number(monto)||0, categoria, fecha:new Date(fecha).toISOString()});
   };
@@ -1640,7 +1646,7 @@ function PedidosSub({role, showToast}){
   const gruposPorDia = useMemo(()=>{
     const map = {};
     completadosTodos.forEach(p=>{
-      const key = new Date(p.fecha).toISOString().slice(0,10);
+      const key = localDateKey(p.fecha);
       if(!map[key]) map[key] = [];
       map[key].push(p);
     });
